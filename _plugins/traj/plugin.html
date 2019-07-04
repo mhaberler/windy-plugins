@@ -1,5 +1,4 @@
 <plugin>
-	<!-- this Plugin does not have any HTML content -->
     <div class="mobile-header" style="font-weight:bold">Trajectory Plugin</div>
     <div  class="plugin-content">
         <span id="desktop-title" style="font-size:15px; font-weight:bold;">Trajectory Plugin</span>  <br>  <br>
@@ -207,7 +206,6 @@
     function drawTraj(cstart,startt=false,lv=-1){
         let c=cstart;
         if (!startt)startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
-        console.log(startt, store.get("timestamp"));
         $('#progress-thumb').style.opacity=0.4;
 
         let nextLvl=(lv)=>{
@@ -253,7 +251,6 @@
                     ll.line._latlngs.forEach((m,i)=>{
                         let d=(m.lat-evlt)*(m.lat-evlt)+(m.lng-evln)*(m.lng-evln);
                         if (d<mind){mind=d; ii=i}
-                        console.log(d);
                     })
                     store.set("timestamp",ll.t+ii*sample*min1);
 
