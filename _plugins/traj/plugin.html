@@ -19,6 +19,7 @@
     </div>
 
 	<script>
+
 	import map from '@windy/map';
 	import store from '@windy/store';
 	import bcast from '@windy/broadcast';
@@ -28,55 +29,122 @@
     import utils from '@windy/utils';
     import ib from './infobox.mjs';
     import pluginDataLoader from '@windy/pluginDataLoader'
+    import metrics from '@windy/metrics';
 
     const load = pluginDataLoader({
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
 		, plugin: 'windy-plugin-da'
 	});
 
+    let ascent=1, descent=1;
+    let pntAlt,pntAltm;
     let pickerPos;
     let durmin=0;
     let reftime;
     let hrsInt;
     let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;   let d6=6*24*60*60*1000;
     let sample=15;
+    var sampleAscDes=1;
     let ts;
     let datai;
     let selpth;
+    let startlvl, startmodel;
+    let metric_wind=store.get("metric_wind");
+    let metric_dist=metricDist(metric_wind);
+    store.on("metric_wind",w=>{
+        metric_wind=w;
+        metric_dist=metricDist(w);
+    });
+
+    function metricDist(mw){
+        switch (mw){
+            case "m/s":  case "km/h":  return "km";  break;
+            case "mph":   return "mi";  break;
+            default: return  "NM";
+        }
+    }
 
     let levels=store.get("availLevels");
-    let selLvls=[ {lvl: "surface", alt:"30", sel: false, col:"rgba(205, 92, 92, 1)"}
-        , {lvl: "100m", alt:"330",   sel: false,  col: "rgba(255, 160, 122, 1) "}
-        , {lvl: "950h", alt:"2000",  sel: false,  col: "rgba(255, 0, 0, 1)"}
-        , {lvl: "925h", alt:"2500",  sel: false,  col: "rgba(255, 192, 203, 1)   "}
-        , {lvl: "900h", alt:"3000",  sel: false,  col: "rgba(255, 105, 180, 1) "}
-        , {lvl: "850h", alt:"5000",  sel: false,  col: "rgba(255, 160, 122, 1)"}
-        , {lvl: "800h", alt:"6400",  sel: false,  col: "rgba(255, 165, 0, 1)"}
-        , {lvl: "700h", alt:"10000", sel: false,  col: "rgba(255, 255, 0, 1)"}
-        , {lvl: "600h", alt:"14000", sel: false,  col: "rgba(255, 228, 181, 1)"}
-        , {lvl: "500h", alt:"18000", sel: false,  col: "rgba(255, 0, 255, 1)"}
-        , {lvl: "400h", alt:"24000", sel: false,  col: "rgba(173, 255, 47, 1)"}
-        , {lvl: "300h", alt:"30000", sel: false,  col: "rgba(0, 255, 255, 1)"}
-        , {lvl: "200h", alt:"39000", sel: false,  col: "rgba(135, 206, 250, 1)" }
-        , {lvl: "150h", alt:"45000", sel: false,  col: "rgba(255, 255, 255, 1)"}];
-
+    let selLvls=[ {lvl: "surface", alt:30, altm:10,    sel: false,
+                //col:"DarkRed"}
+                col:"rgba(205, 92, 92, 1)"}
+        , {lvl: "1000h", alt:330, altm:100,  sel: false,
+                //col: "DarkGreen"}
+                col:"rgba(255, 160, 122, 1) "}
+        , {lvl: "950h", alt:2000, altm: 600, sel: false,
+                //col: "DarkYellow"}
+                col:"rgba(255, 0, 0, 1)"}
+        , {lvl: "925h", alt:2500, altm: 750, sel: false,
+                //col: "DarkBlue"}
+                col:"rgba(255, 192, 203, 1)   "}
+        , {lvl: "900h", alt:3000, altm:900, sel: false,
+                //col: "DarkMagenta"}
+                col:"rgba(255, 105, 180, 1) "}
+        , {lvl: "850h", alt:5000,  altm:1500, sel: false,
+                //col: "DarkCyan"}
+                col:"rgba(255, 160, 122, 1)"}
+        , {lvl: "800h", alt:6400,  altm:2000, sel: false,
+                //col: "Red"}
+                col:"rgba(255, 165, 0, 1)"}
+        , {lvl: "700h", alt:10000, altm:3000, sel: false,
+                //col: "Green"}
+                col:"rgba(255, 255, 0, 1)"}
+        , {lvl: "600h", alt:14000, altm:4200, sel: false,
+                //col: "Yellow"}
+                col:"rgba(255, 228, 181, 1)"}
+        , {lvl: "500h", alt:18000, altm:5500,sel: false,
+                //col: "Blue"}
+                col:"rgba(255, 0, 255, 1)"}
+        , {lvl: "400h", alt:24000, altm:7000, sel: false,
+                //col: "Magenta"}
+                col:"rgba(173, 255, 47, 1)"}
+        , {lvl: "300h", alt:30000, altm:9000, sel: false,
+                //col: "Cyan"}
+                col:"rgba(0, 255, 255, 1)"}
+        , {lvl: "200h", alt:39000, altm:11700, sel: false,
+                //col: "LightGray"}
+                col:"rgba(135, 206, 250, 1)" }
+        , {lvl: "150h", alt:45000, altm:13500, sel: false,
+                //col: "White"}
+                col:"rgba(255, 255, 255, 1)"}
+    ];
     ////Box at bottom left
-    ib(`<div style="padding:5px 5px 3px 5px ; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6)">
+    ib(`<div style="box-sizing-border-box; padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
             <div id="select-levels" style="width:230px; font-size:12px; margin-bottom:8px;"><div style="margin-bottom:5px;font-size:13px">Select Levels</div></div>
+
+            <div style="display:inline-block">
+                <div style="margin:0px;position:relative; width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
+                    <input id="asc_range" step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
+                    <div id="thumb_asc" class="thumb"></div>
+                </div>
+                <div  style="width:113px;   ">Ascent: <span id="asc_span"></span></div>
+            </div>
+            <div style="display:inline-block">
+                <div style="margin:0px;position:relative;  display:inline-block; width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
+                    <input id="des_range" step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
+                    <div id="thumb_des" class="thumb"></div>
+                </div>
+                <div  style="width:113px;   ">Descent: <span id="des_span"></span></div>
+            </div>
+
             <div style="position:relative; width:230px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
-                <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:212px; z-index:999; opacity:0;" type="range"  max="96" >
+                <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:224px; z-index:999; opacity:0;" type="range"  max="96" >
                 <div id="thumb1" class="thumb"></div>
                 <div id="progress-thumb" class="thumb" style="opacity:0" ></div>
             </div>
-            <div  style="display:inline-block;  width:100px;  padding-top:6px; ">Duration: <span id="duration"></span></div>
-            <div id="start-IP" class="start-buttons">
-                Start
-            </div>
-            <div id="clear-IP" class="start-buttons" style="margin-left:2px;margin-right:2px;">
-                Clear
-            </div>
+            <div  style="  width:100px; ">Duration: <span id="duration"></span></div>
+
             <div id="open-left-pane" class="start-buttons">
                 Menu
+            </div>
+            <div id="save-gpx" class="start-buttons">
+                Save
+            </div>
+            <div id="clear-IP" class="start-buttons">
+                Clear
+            </div>
+            <div id="start-IP" class="start-buttons">
+                Start
             </div>
         </div>
         `,
@@ -95,10 +163,23 @@
         }));
         traj=[];
     });
+     $("#save-gpx").addEventListener("click",()=>{
+        saveGPX();
+    });
     $("#dur_range").addEventListener("input",e=>{
         $('#thumb1').style.left=210*e.target.value/96+'px';
         durmin=e.target.value*15;
         $('#duration').innerHTML=('0'+Math.floor(durmin/60)).slice(-2)+':'+('0'+ durmin%60).slice(-2);
+    });
+    $("#asc_range").addEventListener("input",e=>{
+        $('#thumb_asc').style.left=93*e.target.value/8+'px';
+        ascent=e.target.value;
+        $('#asc_span').innerHTML=ascent+" m/s";
+    });
+    $("#des_range").addEventListener("input",e=>{
+        $('#thumb_des').style.left=93*e.target.value/8+'px';
+        descent=e.target.value;
+         $('#des_span').innerHTML=descent+" m/s";
     });
 
     if (rs.isMobile)$("#desktop-title").style.display="none";
@@ -166,7 +247,7 @@
     let cntr=map.getCenter();   cntr.lon=cntr.lng;  cntr.model="ecmwf";
     load("forecast",cntr).then(data=>{
         reftime=new Date(data.data.header.refTime).getTime();
-    });
+    }  );
 
     function time2path(t){
         hrsInt=t-reftime>d6?6:3;
@@ -184,28 +265,34 @@
     store.on("timestamp",e=>{
         let p=store.get("path");
         if (selpth!=p){
-            traj.forEach(e=>e.forEach(l=>{
+            traj.forEach(e=>e.seg.forEach(l=>{
                 if (l.pth==p)l.line.setStyle({weight:4});
                 else l.line.setStyle({weight:2});
             }));
             selpth=p;
         }
-    });
+    }  );
 
     store.on("level",lvl=>{
         selLvls.forEach(e=>{
             e.div.style.fontWeight= e.lvl==lvl?"bold":"normal";
         })
         if(lvl=="100m")lvl="1000h";
-        traj.forEach(e=>e.forEach(l=>{
+        traj.forEach(e=>e.seg.forEach(l=>{
             if (l.lvl==lvl)l.line.setStyle({opacity:1});
             else l.line.setStyle({opacity:0.4});
         }));
-    });
+    }  );
 
     function drawTraj(cstart,startt=false,lv=-1){
         let c=cstart;
-        if (!startt)startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
+        pntAltm=-1;
+
+        if (!startt){
+            startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
+            startlvl=store.get("level");
+            startmodel=store.get("product");  console.log(startmodel);
+        }
         $('#progress-thumb').style.opacity=0.4;
 
         let nextLvl=(lv)=>{
@@ -220,46 +307,48 @@
         let lvl=selLvls[lv].lvl;
         let col=selLvls[lv].col;
 
-        if (lvl=="100m")     lvl="1000h";
-        else if (lvl=="250h"){lvl="300h"; store.set("level",lvl)}
+        if (lvl=="250h"){lvl="300h"; store.set("level",lvl)}
 
-        traj.forEach(e=>e.forEach(l=>l.line.setStyle({opacity:0.4})));
-        let k=traj.push([])-1;
+        traj.forEach(e=>e.seg.forEach(l=>l.line.setStyle({opacity:0.4})));
+        let k=traj.push({
+            starttimeStr:new Date(startt).toISOString().slice(0,-5)+"Z",
+            dist:0,
+            ete:0,
+            lvl:lvl,
+            alt:selLvls[lv].alt,
+            altm:selLvls[lv].altm,
+            model:startmodel,
+            seg:[]
+        })-1;
+
         let previ=-99;
         let j=-1;
         let n=0;
 
         let fetchData=(c,t,lvl)=>{
-            c.model="ecmwf";
-            let i=time2index(t);
-            n+=sample/15;
-            $('#progress-thumb').style.left=180*n/96+'px';
+            let i=time2index(t);  //i refers to index in data array,  3 hourly intervals
             selpth=time2path(t);
             store.set("timestamp",t);
-            if (i!=previ){
+            if (i!=previ){  //add segment with polyline
                 j++;
-                //console.log(col);
-                traj[k][j]={
-                    line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.1}).addTo(map),
+                traj[k].seg[j]={
+                    line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
                     ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
-                    lvl:lvl, t:t, pth:selpth, j:j, k:k,  mrkr:[]
+                    lvl:lvl, alt:selLvls[lv].alt, t:t, pth:selpth, j:j, k:k,  pnts:[]
                 };
-                let ll=traj[k][j];
+                let ll=traj[k].seg[j];
                 ll.ghostline.on("click",ev=>{
-
-                    let evlt=ev.latlng.lat, evln=ev.latlng.lng; let mind=Infinity; let ii;
-                    ll.line._latlngs.forEach((m,i)=>{
-                        let d=(m.lat-evlt)*(m.lat-evlt)+(m.lng-evln)*(m.lng-evln);
-                        if (d<mind){mind=d; ii=i}
-                    })
-                    store.set("timestamp",ll.t+ii*sample*min1);
+                    ghostmrkr.k=k;
+                    let nearestPnt=placeInfomrkr(ev.latlng);
+                    store.set("timestamp",nearestPnt.t);
+                    ghostmrkr.setLatLng(nearestPnt);
 
                     selpth=ll.pth;
                     store.set("level",ll.lvl=="1000h"?"100m":ll.lvl);
                     selLvls.forEach(e=>{
                         if(ll.lvl==e.lvl)e.div.style.fontWeight="bold"; else e.div.style.fontWeight="normal";
-                    })
-                    traj.forEach(e=>e.forEach(l=>{
+                    });
+                    traj.forEach(e=>e.seg.forEach(l=>{
                         if (ll.k==l.k){
                             if (ll.j==l.j) l.line.setStyle({weight:4, opacity:1});
                             else l.line.setStyle({weight:2, opacity:0.9});
@@ -270,51 +359,132 @@
             }
 
             let fetchPoint=c=>{
+                c.model=startmodel;
                 load('airData',c).then(data=>{
-                    let v=data.data.data["wind_v-"+lvl][i];
-                    let u=data.data.data["wind_u-"+lvl][i];
-                    let o=utils.wind2obj([u,v,0]);
-                    let d=sample*60*o.wind;
-                    var dirto=(o.dir+180)%360;
+                    let nextTraj=false;
+                    let smpl=sampleAscDes;
+                    let pntElev=data.data.header.elevation
 
-                     /////////calculate next point,  thx to Chris Veness (github)
-                    var ad=d/6371000;//angular distance
-                    var rad=Math.PI/180;
-                    var brng=dirto*rad;
-                    var lat1=c.lat*rad;
-                    var lon1=c.lon*rad;
-                    var lat2 = Math.asin(Math.sin(lat1)*Math.cos(ad) + Math.cos(lat1)*Math.sin(ad)*Math.cos(brng))   ;
-                    var lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(ad)*Math.cos(lat1), Math.cos(ad)-Math.sin(lat1)*Math.sin(lat2))   ;
-                    lat2/=rad; lon2/=rad;
-                    ///////////
+                    //look for phase and determine next alt.  With start of traj pntAltm=-1
+                    if (pntAltm<0){
+                        pntAltm=pntElev;
+                    } else if (t>ts+durmin*min1){
+                        pntAltm-=descent*smpl*60;
+                    } else if (pntAltm<traj[k].altm){
+                        pntAltm+=ascent*smpl*60;
+                        if (pntAltm>=traj[k].altm){
+                            pntAltm=traj[k].altm;
+                            smpl=sample;
+                        }
+                    } else  smpl=sample;
 
-                    traj[k][j].line.addLatLng([lat2,lon2]);
-                    traj[k][j].ghostline.addLatLng([lat2,lon2]);
+                    if (pntAltm<pntElev) {nextTraj=true;}
+                    else {
+                        n+=smpl/15;
+                        $('#progress-thumb').style.left=210*n/96+'px';
 
-                    if (t%h1==0){
-                        let tm=t;
-                        traj[k][j].mrkr.push(
-                             L.circleMarker(c,{radius:2,color:"black", weight:1,  opacity:0.5, interactive:false})
-                                .addTo(map)
-                        );
+                        let topi;
+                        for (topi=1; selLvls[topi].altm<=pntAltm && topi<selLvls.length; topi++);
+                        let top=selLvls[topi].altm;
+                        let btmi=topi-1;
+                        let btm=selLvls[btmi].altm;
+                        if (selLvls[btmi].altm<pntElev){ btmi=0; btm=pntElev;}
+                        let rtio= (pntAltm-btm)/(top-btm);
+                        //console.log("btmi",btmi,"btm",btm,"topi", topi,"top", top, rtio)
+                        //console.log("smpl",smpl,"vs",vs,"alt",pntAltm,"ele",pntElev);
+
+                        let getWind=lvli=>{    //let o=utils.wind2obj([u,v,0]);  utils of windy rounds to 10,  thus do not use
+                            let u=data.data.data["wind_u-"+selLvls[lvli].lvl][i];
+                            let v=data.data.data["wind_v-"+selLvls[lvli].lvl][i];
+                            return{
+                                wind:Math.sqrt(u*u+v*v),
+                                dirto:Math.floor(180*Math.atan2(u,v)/Math.PI)
+                            }
+                        }
+
+                        ////vertical linear interpolation on altitude in meter.  pressure  better???
+                        let wind,dirto,nearestlvl;
+                        if (rtio==0){
+                            let w=getWind(btmi);
+                            wind=w.wind;
+                            dirto=w.dirto;
+                            nearestlvl=selLvls[btmi].lvl;
+                        } else {
+                            let wb=getWind(btmi);
+                            let wt=getWind(topi);
+                            wind= wb.wind+(wt.wind-wb.wind)*rtio;
+                            dirto=wb.dirto+(wt.dirto-wb.dirto)*rtio;
+                            //console.log("rtio",rtio);
+                            //console.log("wind:",wb.wind,wt.wind,wind);
+                            //console.log("dir:",wb.dirto,wt.dirto,dirto);
+                            nearestlvl=selLvls[rtio<0.5?btmi:topi].lvl;
+                        }
+                        let dirfrom=(dirto+180)%360;
+
+                        let d=smpl*60*wind;
+
+                        traj[k].dist+=d;
+                        traj[k].ete+=smpl*min1;
+                        if(!traj[k].update) traj[k].update=data.data.header.update;
+
+                         /////////calculate next point,  thx to Chris Veness (github)
+                        var ad=d/6371000;//angular distance
+                        var rad=Math.PI/180;
+                        var brng=dirto*rad;
+                        var lat1=c.lat*rad;
+                        var lon1=c.lon*rad;
+                        var lat2 = Math.asin(Math.sin(lat1)*Math.cos(ad) + Math.cos(lat1)*Math.sin(ad)*Math.cos(brng))   ;
+                        var lon2 = lon1 + Math.atan2(Math.sin(brng)*Math.sin(ad)*Math.cos(lat1), Math.cos(ad)-Math.sin(lat1)*Math.sin(lat2))   ;
+                        lat2/=rad; lon2/=rad;
+                        ///////////
+
+                        traj[k].seg[j].line.addLatLng([lat2,lon2]);
+                        traj[k].seg[j].ghostline.addLatLng([lat2,lon2]);
+                        traj[k].seg[j].pnts.push({
+                            lat:c.lat,lng:c.lon,
+                            t:t,
+                            tStr: new Date(t).toISOString().slice(0,-5)+"Z",
+                            d:d,
+                            elev:pntElev,
+                            alt:pntAlt,
+                            altm:pntAltm,
+                            lvl:nearestlvl,
+                            wind:wind,
+                            dir:Math.round(dirfrom),
+                            sample:smpl
+                        });
+
+                        ////leave out hour markers for now.
+                      /*  if (t%h1==0){
+                            let tm=t;
+                            traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1].mrkr=
+                                 L.circleMarker(c,{radius:2,color:"black", weight:1,  opacity:0.5, interactive:false})
+                                    .addTo(map)
+                        }*/
+
+                        t+=smpl*min1;
+                        if ( t>reftime+d6) {
+                            nextTraj=true;
+                            console.error("Only 6 days available in dataloader.  Ivo and team:  Please add more");
+                        }
                     }
 
-                    t+=sample*min1;
-                    if ((t<reftime+d6)&&(t<ts+durmin*min1)){
-                        setTimeout(fetchData,300,{lat:lat2,lon:lon2},t,lvl);
-                    }   else {
-                        if (t>reftime+d6)  console.error("Only 6 days available in dataloader.  Ivo and team:  Please add more");
+                    if (nextTraj){
                         store.set("timestamp",startt);
                         $('#progress-thumb').style.opacity=0;
                         lv=nextLvl(lv);
                         if (lv>=0){
                             drawTraj(cstart,startt,lv);
+                        }  else {
+                            console.log("This is the array of polylines and other properties:",traj);
+                            store.set("level",startlvl);
                         }
-                    }
+                    } else setTimeout(fetchData,300,{lat:lat2,lon:lon2},t,lvl);
                 }).catch(er=>{
                     console.log("usually  blocked by server CORS error - too busy???",   er);  /////usually  blocked by server CORS error - too busy???
                     setTimeout(fetchPoint,1000,c);
                 });
+                //load("forecast",c).then(console.log);
             }
             fetchPoint(c);
         }
@@ -323,6 +493,154 @@
             fetchData(c,startt,lvl);
         }
     }
+
+
+///////Info marker
+    let infoicon=L.divIcon({html:
+        `<div id="mrkr" style="display:none; height:100px; width:120px; height:25px; border:0px solid white; outline-style:none; position:absolute;   font-family:arial; color:white;  text-shadow: 1px 1px 1px rgba(0,0,0,0.4); background-color:transparent; white-space:nowrap;">
+            <div id="close-info-mrkr"  class="closing-x" style="display:block; margin:3px; font-size:15px; top:0px; right:0px;"></div>`+
+            `<div style="display:block; position:absolute; left:-15px; top:0px; width:30px; height:140px;">
+                <div style="position:absolute;left:15px;top:3px;border-left:2px solid rgba(0,0,0,0.8); height:115px;"></div>
+                <div style="display:none; position:absolute; left:12px; top:calc(120.5px); background-color:white; width:8px; height:8px; border-radius:4px;"></div>
+            </div>`+
+            //`<div id="posname" class="picker-transparent"  style="position:absolute; top:-20px; left:0px; transform:translateX(-50%); font-weight:bold; "></div>`+
+            `<div id="mrkrLeft" style="pointer-events: none; position:absolute; font-size:11px; line-height:110%;  top:0px;  position:absolute; padding:3px;  border-radius:5px 0px 0px 5px;  right:120px; opacity:1; background-color:rgba(0,0,0,0.7);">  </div>`+
+            `<div id="mrkrRight" style="pointer-events: none; line-height:110%; width:100%; font-size:11px; position:absolute; padding:3px;  border-radius:0px 5px 5px 0px;  left:0px; opacity:1; background-color:rgba(0,0,0,0.8);"></div>
+        </div>`
+    ,iconAnchor:[0,125]});
+    let infomrkr = L.marker([0,0],{icon:infoicon, interactive:true, bubblingMouseEvents:false, opacity:1,  zIndexOffset:4700});
+    infomrkr.addTo(map);
+    infomrkr._icon.style.outlineStyle="none";
+    L.DomEvent.on( $('#close-info-mrkr'), 'click', e=>{
+        //use Leaflet addListener and not usual addEventListener to allow stop propagtion of the click, which will then open the picker
+        L.DomEvent.stopPropagation(e);
+        //infomrkr.setOpacity(0);   Do not use setOpacity,  mrkr hidden but still clickable
+        $("#mrkr").style.display="none";
+        $("#active-mrkr").style.display="none";
+    });
+
+    let amicon=L.divIcon({
+            html:"<div id='active-mrkr' style='position:absolute;width:12px;height:12px;border-radius:5px;border:1px solid white'></div>",
+            iconAnchor:[6,6]
+    });
+    let activemrkr=L.marker([0,0],{
+        icon:amicon, opacity:1, interactive:false
+    }).addTo(map);
+
+    let gmicon=L.divIcon({
+            html:"<div style='position:absolute; width:20px;height:20px;border-radius:8px;border:1px solid white'></div>",
+            iconAnchor:[10,10]
+    })
+    let ghostmrkr=L.marker([0,0],{
+        icon:gmicon, opacity:0, interactive:true, draggable:true, zIndexOffset:5000,  bubblingMouseEvents:false
+    }).addTo(map);
+
+    function placeInfomrkr(c){
+        if (typeof ghostmrkr.k!=="undefined"){
+            let k=ghostmrkr.k;
+            let pnt;
+            let evlt=c.lat, evln=c.lng; let mind=Infinity;
+            traj[k].seg.forEach(sg=>sg.pnts.forEach(p=>{
+                let d=(p.lat-evlt)*(p.lat-evlt)+(p.lng-evln)*(p.lng-evln);
+                if (d<mind){mind=d; pnt=p}
+            }));
+            activemrkr.setLatLng(pnt);
+            $("#active-mrkr").style.display="block";
+            infomrkr.setLatLng(pnt);
+            $("#mrkrLeft").innerHTML=
+                "Model: "+traj[k].model+"<br>"+
+                "Tot Dist: "+metrics.distance.conv[metric_dist].conversion(traj[k].dist).toFixed(2)+metric_dist+"<br>"+
+                "Start: "+traj[k].starttimeStr.replace("T","<br>");
+            $("#mrkrRight").innerHTML=
+                "Wind: "+metrics.wind.conv[metric_wind].conversion(pnt.wind).toFixed(2)+metric_wind+"<br>"+
+                "Dir: "+pnt.dir+"<br>"+
+                "Time: "+pnt.tStr.slice(10)+"<br>"+
+                "Alt: "+pnt.altm+"m"+"<br>"+
+                "Lvl: "+pnt.lvl +"<br>"+
+                "Elev: "+pnt.elev+"m";
+            $("#mrkr").style.display="block";
+            store.set("timestamp",pnt.t);
+            store.set("level",pnt.lvl=="1000h"?"100m":pnt.lvl);
+            return pnt;
+        }
+    }
+
+    ghostmrkr.on("drag",ev=>{
+        placeInfomrkr(ev.latlng);
+    });
+
+    ghostmrkr.on("dragstart",e=>{
+        bcast.fire('rqstClose','picker');
+    });
+    ghostmrkr.on("dragend",ev=>{
+        ghostmrkr.setLatLng(activemrkr._latlng);
+
+    });
+    ghostmrkr.on("click",e=>{
+    })
+
+/////  function save .gpx
+function saveGPX(){
+
+    let colAr= ["DarkRed",  "DarkGreen", "DarkYellow", "DarkBlue", "DarkMagenta", "DarkCyan", "LightGray", "DarkGray",  "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White"];
+
+    let sv=(content,fnm)=>{
+        let a = document.createElement("a");
+        let file=new Blob([content]);
+        let url = URL.createObjectURL(file);
+        a.href = url;
+        a.download = fnm;
+        document.body.appendChild(a);
+        a.click();
+    }
+
+    let s=`<?xml version="1.0" encoding="utf-8"?><gpx creator="Windy.com/plugins --- windy-plugin-traj" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">`;
+    traj.forEach(e=>{
+        let mn=0;
+        let alt=Math.round(Number(e.alt)*0.3048);
+        let col=colAr[selLvls.findIndex(lv=>lv.lvl==e.lvl)];
+
+        s+=`
+    <trk>
+        <name>${e.lvl}</name>
+        <desc>Model:${e.model},  Update time:${e.update},  Distance:${Math.round(e.dist)}m,  Time:${Math.round(e.ete/min1)}min,  Av speed:${Math.round((e.dist/10)/(e.ete/h1))/100}kph,  Alt: ${e.alt}ft </desc>`+
+
+        `
+        <extensions>
+            <gpxx:TrackExtension xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
+                <gpxx:DisplayColor>${col}</gpxx:DisplayColor>
+            </gpxx:TrackExtension>
+        </extensions>`+
+
+        `
+        <trkseg>`;
+                    e.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
+                        //let t=ej.t;
+                            //let tm= new Date(pnt.t).toISOString().slice(0,-5)+"Z";
+                            s+=
+        `
+            <trkpt lat="${pnt.lat}" lon="${pnt.lng}">
+                <name>${pnt.lvl+"_"+mn}</name>
+                <time>${pnt.tStr}</time>
+                <ele>${pnt.altm}</ele>
+            </trkpt> `;
+                                mn+=pnt.sample;
+                            }
+                    ));
+                    s+=
+        `
+        </trkseg>
+    </trk>`;
+                });
+                s+=`
+</gpx>`;
+
+    let tm= (new Date(traj[0].seg[0].t).toISOString()).slice(0,-5);
+    sv(s,"trajectory__"+tm+".gpx");
+}
+
+//////////
+
 
 	</script>
 </plugin>
