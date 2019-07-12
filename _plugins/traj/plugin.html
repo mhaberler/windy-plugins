@@ -1,24 +1,28 @@
 <plugin>
     <div class="mobile-header" style="font-weight:bold">Trajectory Plugin</div>
     <div  class="plugin-content">
-        <span id="desktop-title" style="font-size:15px; font-weight:bold;">Trajectory Plugin</span>  <br>  <br>
+        <span id="desktop-title" style="font-size:14px; font-weight:bold;">Trajectory Plugin</span>  <br>  <br>
         &nbsp;-&nbsp;Place the picker. <br>
         &nbsp;-&nbsp;Select levels. <br>
         &nbsp;-&nbsp;Select trajectory duration. <br>
+        &nbsp;-&nbsp;Select Ascent and Descent speed (m/s). <br>
+        &nbsp;-&nbsp;If Ascent or Descent is set at 0, ascent or descent phases will be ignored. <br>
         &nbsp;-&nbsp;Set start time with Windy slider.   <br>
         &nbsp;-&nbsp;Start!    <br>
-        &nbsp;-&nbsp;Current sample interval is 15 minutes.  <br>
+        &nbsp;-&nbsp;Current sample interval is 15 minutes,  ascent and descent phases at 1 min.  <br>
         &nbsp;-&nbsp;Duration slider will show progress. <br>
         &nbsp;-&nbsp;You can create many trajectories.   <br>
-        &nbsp;-&nbsp;Clicking a trajectory will switch the map to the correct timestamp and level. <br>
-        &nbsp;-&nbsp;ECMWF data with pluginDataLoader is used.<br>  <br>
+        &nbsp;-&nbsp;Clicking a trajectory will switch the map to the correct timestamp and level,  and the marker will show the info at that point. <br>
+        &nbsp;-&nbsp;PluginDataLoader is used,  will use the model selected (ECMWF, GFS or ICON).<br>  <br>
         <div id="select-colors" style="display:inline-block">
             <span style="font-size:15px; font-weight:bold;">Select Colors:</span><br> <br>
         </div>
         <div id="colpick" style="position:relative;display:inline-block; vertical-align:top;"></div>
+        <div style="font-size:10px;margin-top:15px">Settings will be stored in localStorage on your browser.</div>
     </div>
 
-	<script>
+<script>
+    let version= "0.3.3";
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -36,19 +40,27 @@
 		, plugin: 'windy-plugin-da'
 	});
 
-    let ascent=1, descent=1;
+    let currentlvl;
+    let ascent=localStorage.getItem("ascent");
+    if (!ascent) ascent=0;
+    let descent=localStorage.getItem("descent");
+    if (!descent) descent=0;
+    let durmin=localStorage.getItem("durmin");
+    if (!durmin) durmin=0;
+
     let pntAlt,pntAltm;
     let pickerPos;
-    let durmin=0;
+
     let reftime;
     let hrsInt;
-    let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;   let d6=6*24*60*60*1000;
+    let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;  let d1=24*60*60*1000;   let d6=6*24*60*60*1000;
     let sample=15;
     var sampleAscDes=1;
     let ts;
     let datai;
     let selpth;
     let startlvl, startmodel;
+    let running=false;
     let metric_wind=store.get("metric_wind");
     let metric_dist=metricDist(metric_wind);
     store.on("metric_wind",w=>{
@@ -65,49 +77,79 @@
     }
 
     let levels=store.get("availLevels");
-    let selLvls=[ {lvl: "surface", alt:30, altm:10,    sel: false,
+    let selLvls;
+    try{
+        selLvls=JSON.parse(localStorage.getItem("selLvls"));
+    } catch (e){console.log("error localStorage, load default values");}
+
+    if (!selLvls  ||  selLvls[0].col.slice(0,2)=="rg")
+    selLvls=[ {lvl: "surface", alt:30, altm:10,    sel: false,
                 //col:"DarkRed"}
-                col:"rgba(205, 92, 92, 1)"}
+                //col:"rgba(205, 92, 92, 1)"}
+                col: "#CD5C5C"}
         , {lvl: "1000h", alt:330, altm:100,  sel: false,
                 //col: "DarkGreen"}
-                col:"rgba(255, 160, 122, 1) "}
+                //col:"rgba(255, 160, 122, 1) "}
+                col:"#FFA07A"}
         , {lvl: "950h", alt:2000, altm: 600, sel: false,
                 //col: "DarkYellow"}
-                col:"rgba(255, 0, 0, 1)"}
+                //col:"rgba(255, 0, 0, 1)"}
+                col: "#FF0000"}
         , {lvl: "925h", alt:2500, altm: 750, sel: false,
                 //col: "DarkBlue"}
-                col:"rgba(255, 192, 203, 1)   "}
+                //col:"rgba(255, 192, 203, 1)   "}
+                col:"#FFC0CB"}
         , {lvl: "900h", alt:3000, altm:900, sel: false,
                 //col: "DarkMagenta"}
-                col:"rgba(255, 105, 180, 1) "}
+                //col:"rgba(255, 105, 180, 1) "}
+                col:"#FF69B4"}
         , {lvl: "850h", alt:5000,  altm:1500, sel: false,
                 //col: "DarkCyan"}
-                col:"rgba(255, 160, 122, 1)"}
+                //col:"rgba(255, 160, 122, 1)"}
+                col:"#FFA07A"}
         , {lvl: "800h", alt:6400,  altm:2000, sel: false,
                 //col: "Red"}
-                col:"rgba(255, 165, 0, 1)"}
+                //col:"rgba(255, 165, 0, 1)"}
+                col:"#FFA500"}
         , {lvl: "700h", alt:10000, altm:3000, sel: false,
                 //col: "Green"}
-                col:"rgba(255, 255, 0, 1)"}
+                //col:"rgba(255, 255, 0, 1)"}
+                col:"#FFFF00"}
         , {lvl: "600h", alt:14000, altm:4200, sel: false,
                 //col: "Yellow"}
-                col:"rgba(255, 228, 181, 1)"}
+                //col:"rgba(255, 228, 181, 1)"}
+                col:"#FFE4B5"}
         , {lvl: "500h", alt:18000, altm:5500,sel: false,
                 //col: "Blue"}
-                col:"rgba(255, 0, 255, 1)"}
+                //col:"rgba(255, 0, 255, 1)"}
+                col:"#FF00FF"}
         , {lvl: "400h", alt:24000, altm:7000, sel: false,
                 //col: "Magenta"}
-                col:"rgba(173, 255, 47, 1)"}
+                //col:"rgba(173, 255, 47, 1)"}
+                col:"#ADFF2F"}
         , {lvl: "300h", alt:30000, altm:9000, sel: false,
                 //col: "Cyan"}
-                col:"rgba(0, 255, 255, 1)"}
+                //col:"rgba(0, 255, 255, 1)"}
+                col:"#00FFFF"}
         , {lvl: "200h", alt:39000, altm:11700, sel: false,
                 //col: "LightGray"}
-                col:"rgba(135, 206, 250, 1)" }
+                //col:"rgba(135, 206, 250, 1)" }
+                col:"#87CEFA"}
         , {lvl: "150h", alt:45000, altm:13500, sel: false,
                 //col: "White"}
-                col:"rgba(255, 255, 255, 1)"}
+                //col:"rgba(255, 255, 255, 1)"}
+                col:"#FFFFFF"}
     ];
+
+    ////message div
+    let msgdiv=document.createElement("div");
+    msgdiv.style.position="absolute";
+    msgdiv.style.fontSize="30px";
+    msgdiv.style.top="30%";
+    msgdiv.style.left="50%";
+    msgdiv.style.color="white";
+    msgdiv.style.transform="translate(-50%,-50%)";
+
     ////Box at bottom left
     ib(`<div style="box-sizing-border-box; padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
             <div id="select-levels" style="width:230px; font-size:12px; margin-bottom:8px;"><div style="margin-bottom:5px;font-size:13px">Select Levels</div></div>
@@ -121,7 +163,7 @@
             </div>
             <div style="display:inline-block">
                 <div style="margin:0px;position:relative;  display:inline-block; width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
-                    <input id="des_range" step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
+                    <input id="des_range"  step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
                     <div id="thumb_des" class="thumb"></div>
                 </div>
                 <div  style="width:113px;   ">Descent: <span id="des_span"></span></div>
@@ -152,35 +194,58 @@
     );
     $("#start-IP").addEventListener("click",()=>{
         ts=store.get("timestamp");
+        startmodel=store.get("product");
         datai=Math.floor((ts-reftime-h3/2)/h3);
-        if (picker.getParams)  drawTraj(picker.getParams());  else console.log("Place the picker,  then click start");
+        if (picker.getParams && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
+            drawTraj(picker.getParams());
+            running=true;
+            $("#start-IP").innerHTML="Stop";
+        }  else if (running){running=false;
+        }  else if (!picker.getParams) {
+            msgdiv.innerHTML="Place picker";
+            document.getElementById("map-container").appendChild(msgdiv);
+            setTimeout(()=>msgdiv.remove(), 2000);
+        }  else {
+            msgdiv.innerHTML=`Model (${startmodel}) not supported`;
+            document.getElementById("map-container").appendChild(msgdiv);
+            setTimeout(()=>msgdiv.remove(), 2000);
+        }
     });
     $("#clear-IP").addEventListener("click",()=>{
-        traj.forEach(e=>e.forEach(l=>{
+        traj.forEach(e=>e.seg.forEach(l=>{
             l.line.remove();
             l.ghostline.remove();
-            l.mrkr.forEach(m=>m.remove());
+            //l.mrkr.forEach(m=>m.remove());
         }));
         traj=[];
     });
      $("#save-gpx").addEventListener("click",()=>{
         saveGPX();
     });
-    $("#dur_range").addEventListener("input",e=>{
-        $('#thumb1').style.left=210*e.target.value/96+'px';
-        durmin=e.target.value*15;
+    function setDur(v){
+        $('#thumb1').style.left=210*v/96+'px';
+        durmin=v*15;
         $('#duration').innerHTML=('0'+Math.floor(durmin/60)).slice(-2)+':'+('0'+ durmin%60).slice(-2);
-    });
-    $("#asc_range").addEventListener("input",e=>{
-        $('#thumb_asc').style.left=93*e.target.value/8+'px';
-        ascent=e.target.value;
-        $('#asc_span').innerHTML=ascent+" m/s";
-    });
-    $("#des_range").addEventListener("input",e=>{
-        $('#thumb_des').style.left=93*e.target.value/8+'px';
-        descent=e.target.value;
-         $('#des_span').innerHTML=descent+" m/s";
-    });
+        localStorage.setItem("durmin",durmin/15);
+    }
+    function setAsc(v){
+        $('#thumb_asc').style.left=93*v/8+'px';
+        ascent=v;
+        if (ascent==0) $('#asc_span').innerHTML="None";
+        else $('#asc_span').innerHTML=ascent+" m/s";
+        localStorage.setItem("ascent",ascent);
+    }
+    function setDes(v){
+        $('#thumb_des').style.left=93*v/8+'px';
+        descent=v;
+        if (descent==0) $('#des_span').innerHTML="None";
+        else $('#des_span').innerHTML=descent+" m/s";
+        localStorage.setItem("descent",descent);
+    }
+    $("#dur_range").addEventListener("input",e=>setDur(e.target.value));
+    $("#asc_range").addEventListener("input",e=>setAsc(e.target.value));
+    $("#des_range").addEventListener("input",e=>setDes(e.target.value));
+    setDur(durmin); setAsc(ascent);  setDes(descent);
 
     if (rs.isMobile)$("#desktop-title").style.display="none";
     if (rs.isTablet){$("#logo").style.left="100%"; $("#logo").style.marginLeft="-150px";}
@@ -188,7 +253,13 @@
     selLvls.forEach((e,i)=>{
         e.div=document.createElement("div");
         e.div.innerHTML=e.lvl+" "+(e.alt<10000?(e.alt+"ft"):(e.alt/100+"FL"));
-        e.div.style.display="inline-block"; e.div.style.opacity=0.5;  e.div.style.width="105px";
+        e.div.style.display="inline-block";  e.div.style.width="115px";
+        if (e.sel){
+            e.div.style.opacity=1; e.div.style.color=e.col;
+        } else {
+            e.div.style.opacity=0.5; e.div.style.color="white";
+        }
+
         e.div.addEventListener("click",el=>{
             if(e.sel){
                 e.div.style.opacity=0.5;
@@ -199,6 +270,7 @@
                 e.div.style.color=e.col;
                 e.sel=true;
             }
+            localStorage.setItem("selLvls",JSON.stringify(selLvls));
         });
 
         let lbl=document.createElement("div");  lbl.innerHTML="<span style='display:inline-block;width:50px'>"+e.lvl+"</span>";
@@ -227,6 +299,7 @@
         selLvls[i].col=c.input.value;
         if(selLvls[i].sel) selLvls[i].div.style.color=selLvls[i].col;
         c.input.style.color=col.alpha<0.4?"black":(col.RGBLuminance<0.3?"white":"black");
+        localStorage.setItem("selLvls",JSON.stringify(selLvls));
     }
 
     setTimeout(()=>{
@@ -244,45 +317,57 @@
     },500);
 
     ////grab reftime
-    let cntr=map.getCenter();   cntr.lon=cntr.lng;  cntr.model="ecmwf";
-    load("forecast",cntr).then(data=>{
-        reftime=new Date(data.data.header.refTime).getTime();
-    }  );
+    function getRefTime(model){
+        let cntr=map.getCenter();   cntr.lon=cntr.lng;    cntr.model=model;
+        load("forecast",cntr).then(data=>{
+            reftime=new Date(data.data.header.refTime).getTime();
+            return reftime;
+        });
+    }
+    startmodel=store.get("product");    getRefTime(startmodel);
 
     function time2path(t){
-        hrsInt=t-reftime>d6?6:3;
+        hrsInt=(startmodel=="ecmwf" && t-reftime>d6)?6:3;
         let tmshift=new Date(t+hrsInt*30*60*1000);
         return tmshift.getUTCFullYear()+"/"+("0"+(tmshift.getUTCMonth()+1)).slice(-2)+"/"+("0"+tmshift.getUTCDate()).slice(-2)+"/"+("0"+Math.floor(tmshift.getUTCHours()/hrsInt)*hrsInt).slice(-2);
     }
 
     function time2index(t){
-        return Math.floor((t-reftime-h3/2)/h3);
+        let i= Math.floor((t-reftime-h3/2)/h3);
+        if (startmodel=="ecmwf"  &&  i>47) i=47+Math.floor((i-46)/2);
+        return i;
+    }
+    function time2midtime(t){
+        let h=(startmodel=="ecmwf" && t-reftime>d6+h3/2)?h3*2:h3;
+        return Math.floor(((t-reftime)+h/2)/h)*h;
     }
 
     let traj=[];
 
-    ////highlight time segment
+    ////highlight time segment   (3 or 6 hours if ecmwf>6 days after reftime)
     store.on("timestamp",e=>{
-        let p=store.get("path");
-        if (selpth!=p){
+            let midtime=time2midtime(e);
             traj.forEach(e=>e.seg.forEach(l=>{
-                if (l.pth==p)l.line.setStyle({weight:4});
+                if (l.midtime==midtime)l.line.setStyle({weight:4});
                 else l.line.setStyle({weight:2});
             }));
-            selpth=p;
-        }
-    }  );
+    });
 
     store.on("level",lvl=>{
         selLvls.forEach(e=>{
             e.div.style.fontWeight= e.lvl==lvl?"bold":"normal";
         })
         if(lvl=="100m")lvl="1000h";
+        currentlvl=lvl;
         traj.forEach(e=>e.seg.forEach(l=>{
             if (l.lvl==lvl)l.line.setStyle({opacity:1});
             else l.line.setStyle({opacity:0.4});
         }));
-    }  );
+    });
+
+    store.on("product",model=>{
+        startmodel=model;
+    });
 
     function drawTraj(cstart,startt=false,lv=-1){
         let c=cstart;
@@ -291,7 +376,6 @@
         if (!startt){
             startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
             startlvl=store.get("level");
-            startmodel=store.get("product");  console.log(startmodel);
         }
         $('#progress-thumb').style.opacity=0.4;
 
@@ -318,6 +402,8 @@
             alt:selLvls[lv].alt,
             altm:selLvls[lv].altm,
             model:startmodel,
+            ascent: ascent,
+            descent: descent,
             seg:[]
         })-1;
 
@@ -327,14 +413,13 @@
 
         let fetchData=(c,t,lvl)=>{
             let i=time2index(t);  //i refers to index in data array,  3 hourly intervals
-            selpth=time2path(t);
             store.set("timestamp",t);
             if (i!=previ){  //add segment with polyline
                 j++;
                 traj[k].seg[j]={
                     line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
                     ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
-                    lvl:lvl, alt:selLvls[lv].alt, t:t, pth:selpth, j:j, k:k,  pnts:[]
+                    lvl:lvl, alt:selLvls[lv].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
                 };
                 let ll=traj[k].seg[j];
                 ll.ghostline.on("click",ev=>{
@@ -361,38 +446,51 @@
             let fetchPoint=c=>{
                 c.model=startmodel;
                 load('airData',c).then(data=>{
-                    let nextTraj=false;
+
+                    let endTraj=false;
                     let smpl=sampleAscDes;
                     let pntElev=data.data.header.elevation
 
                     //look for phase and determine next alt.  With start of traj pntAltm=-1
-                    if (pntAltm<0){
-                        pntAltm=pntElev;
-                    } else if (t>ts+durmin*min1){
-                        pntAltm-=descent*smpl*60;
-                    } else if (pntAltm<traj[k].altm){
-                        pntAltm+=ascent*smpl*60;
-                        if (pntAltm>=traj[k].altm){
-                            pntAltm=traj[k].altm;
-                            smpl=sample;
+                    if (traj[k].lvl=="surface"){
+                        pntAltm=pntElev+10;
+                        smpl=sample;
+                        if (t>ts+durmin*min1) endTraj=true;
+                    }  else {
+                        if (pntAltm<0){
+                            if (ascent==0){
+                                pntAltm=traj[k].altm; smpl=sample;
+                            } else pntAltm=pntElev;
+                        } else if (t>ts+durmin*min1){
+                            if (descent==0 || pntAltm<pntElev) endTraj=true;
+                            else pntAltm-=descent*smpl*60;
+                        } else if (pntAltm<traj[k].altm){
+                            pntAltm+=ascent*smpl*60;
+                            if (pntAltm>=traj[k].altm){
+                                pntAltm=traj[k].altm;
+                                smpl=sample;
+                            }
+                        } else{
+                              smpl=sample;
                         }
-                    } else  smpl=sample;
+                    }
 
-                    if (pntAltm<pntElev) {nextTraj=true;}
-                    else {
+                    console.log("Alt(m):",pntAltm);
+
+
+                    if (!endTraj) {
                         n+=smpl/15;
                         $('#progress-thumb').style.left=210*n/96+'px';
 
                         let topi;
-                        for (topi=1; selLvls[topi].altm<=pntAltm && topi<selLvls.length; topi++);
+                        for (topi=1; topi<selLvls.length-1 && selLvls[topi].altm<=pntAltm; topi++);
+
                         let top=selLvls[topi].altm;
                         let btmi=topi-1;
                         let btm=selLvls[btmi].altm;
                         if (selLvls[btmi].altm<pntElev){ btmi=0; btm=pntElev;}
-                        let rtio= (pntAltm-btm)/(top-btm);
-                        //console.log("btmi",btmi,"btm",btm,"topi", topi,"top", top, rtio)
-                        //console.log("smpl",smpl,"vs",vs,"alt",pntAltm,"ele",pntElev);
-
+                        let vrtio= (pntAltm-btm)/(top-btm);
+                        if (vrtio>=1){btmi=topi; vrtio=0;} //if the pntAltm>topmost level,  then make the topmost index btmi and vrtio 0,  so correctly handled by verticalIP.
                         let getWind=lvli=>{    //let o=utils.wind2obj([u,v,0]);  utils of windy rounds to 10,  thus do not use
                             let u=data.data.data["wind_u-"+selLvls[lvli].lvl][i];
                             let v=data.data.data["wind_v-"+selLvls[lvli].lvl][i];
@@ -403,25 +501,38 @@
                         }
 
                         ////vertical linear interpolation on altitude in meter.  pressure  better???
-                        let wind,dirto,nearestlvl;
-                        if (rtio==0){
-                            let w=getWind(btmi);
-                            wind=w.wind;
-                            dirto=w.dirto;
-                            nearestlvl=selLvls[btmi].lvl;
-                        } else {
-                            let wb=getWind(btmi);
-                            let wt=getWind(topi);
-                            wind= wb.wind+(wt.wind-wb.wind)*rtio;
-                            dirto=wb.dirto+(wt.dirto-wb.dirto)*rtio;
-                            //console.log("rtio",rtio);
-                            //console.log("wind:",wb.wind,wt.wind,wind);
-                            //console.log("dir:",wb.dirto,wt.dirto,dirto);
-                            nearestlvl=selLvls[rtio<0.5?btmi:topi].lvl;
+                        let verticalIP=(rtio,btmi,topi,i)=>{
+                            if (vrtio==0 || typeof topi==="undefined"){
+                                let w=getWind(btmi,i);
+                                w.nearestlvl=selLvls[btmi].lvl;
+                                return w;
+                            } else {
+                                let wb=getWind(btmi,i);
+                                let wt=getWind(topi,i);
+                                return{
+                                    wind: wb.wind+(wt.wind-wb.wind)*vrtio,
+                                    dirto: wb.dirto+(wt.dirto-wb.dirto)*vrtio,
+                                    nearestlvl:selLvls[vrtio<0.5?btmi:topi].lvl
+                                }
+                            }
                         }
-                        let dirfrom=(dirto+180)%360;
+                        let w1=verticalIP(vrtio,btmi,topi,i);
 
-                        let d=smpl*60*wind;
+                        ///interpolate time
+                        let w,w2={};
+                        let midt=data.data.data.hours[i];
+                        let deltat=midt-t;
+                        if ((deltat<0 && i>0)|| (deltat>0 && i<data.data.data.hours.length-1)){
+                            let i2=deltat<0?i-1:i+1;
+                            w2=verticalIP(vrtio,btmi,topi,i2);
+                            let trtio=deltat/Math.abs(data.data.data.hours[i]-data.data.data.hours[i2]);
+                            w={wind: w1.wind+(w1.wind-w2.wind)*trtio ,dirto: w1.dirto+(w1.dirto-w2.dirto)*trtio ,nearestlvl:w1.nearestlvl}
+                        }  else {
+                            w=w1;
+                        }
+
+                        let dirfrom=(w.dirto+180)%360;
+                        let d=smpl*60*w.wind;
 
                         traj[k].dist+=d;
                         traj[k].ete+=smpl*min1;
@@ -430,7 +541,7 @@
                          /////////calculate next point,  thx to Chris Veness (github)
                         var ad=d/6371000;//angular distance
                         var rad=Math.PI/180;
-                        var brng=dirto*rad;
+                        var brng=w.dirto*rad;
                         var lat1=c.lat*rad;
                         var lon1=c.lon*rad;
                         var lat2 = Math.asin(Math.sin(lat1)*Math.cos(ad) + Math.cos(lat1)*Math.sin(ad)*Math.cos(brng))   ;
@@ -448,8 +559,8 @@
                             elev:pntElev,
                             alt:pntAlt,
                             altm:pntAltm,
-                            lvl:nearestlvl,
-                            wind:wind,
+                            lvl:w.nearestlvl,
+                            wind:w.wind,
                             dir:Math.round(dirfrom),
                             sample:smpl
                         });
@@ -463,28 +574,33 @@
                         }*/
 
                         t+=smpl*min1;
-                        if ( t>reftime+d6) {
-                            nextTraj=true;
-                            console.error("Only 6 days available in dataloader.  Ivo and team:  Please add more");
+                        if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu")) {
+                            endTraj=true;
                         }
                     }
 
-                    if (nextTraj){
+                    if (endTraj || !running){
                         store.set("timestamp",startt);
                         $('#progress-thumb').style.opacity=0;
                         lv=nextLvl(lv);
-                        if (lv>=0){
+                        if (lv>=0 && running){
                             drawTraj(cstart,startt,lv);
                         }  else {
+                            running=false;
+                            $("#start-IP").innerHTML="Start";
                             console.log("This is the array of polylines and other properties:",traj);
                             store.set("level",startlvl);
                         }
-                    } else setTimeout(fetchData,300,{lat:lat2,lon:lon2},t,lvl);
+                    } else setTimeout(fetchData,340,{lat:lat2,lon:lon2},t,lvl);
                 }).catch(er=>{
                     console.log("usually  blocked by server CORS error - too busy???",   er);  /////usually  blocked by server CORS error - too busy???
-                    setTimeout(fetchPoint,1000,c);
+                    if (er==0){
+                        msgdiv.innerHTML=`Server not responding... trying...`;
+                        document.getElementById("map-container").appendChild(msgdiv);
+                        setTimeout(()=>msgdiv.remove(), 2000);
+                    }
+                    setTimeout(fetchPoint,3000,c);
                 });
-                //load("forecast",c).then(console.log);
             }
             fetchPoint(c);
         }
@@ -493,7 +609,6 @@
             fetchData(c,startt,lvl);
         }
     }
-
 
 ///////Info marker
     let infoicon=L.divIcon({html:
@@ -550,11 +665,12 @@
             $("#mrkrLeft").innerHTML=
                 "Model: "+traj[k].model+"<br>"+
                 "Tot Dist: "+metrics.distance.conv[metric_dist].conversion(traj[k].dist).toFixed(2)+metric_dist+"<br>"+
-                "Start: "+traj[k].starttimeStr.replace("T","<br>");
+                "Start: "+traj[k].starttimeStr.replace("T","<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")+"<br>"+
+                "Duration: "+Math.round(traj[k].ete/min1)+"min";
             $("#mrkrRight").innerHTML=
                 "Wind: "+metrics.wind.conv[metric_wind].conversion(pnt.wind).toFixed(2)+metric_wind+"<br>"+
                 "Dir: "+pnt.dir+"<br>"+
-                "Time: "+pnt.tStr.slice(10)+"<br>"+
+                "Time: "+pnt.tStr.slice(11)+"<br>"+
                 "Alt: "+pnt.altm+"m"+"<br>"+
                 "Lvl: "+pnt.lvl +"<br>"+
                 "Elev: "+pnt.elev+"m";
@@ -594,45 +710,56 @@ function saveGPX(){
         a.click();
     }
 
-    let s=`<?xml version="1.0" encoding="utf-8"?><gpx creator="Windy.com/plugins --- windy-plugin-traj" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">`;
+    let s=`<?xml version="1.0" encoding="utf-8"?><gpx creator="Windy.com/plugins --- windy-plugin-traj@${version}" version="1.1" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">`;
     traj.forEach(e=>{
-        let mn=0;
-        let alt=Math.round(Number(e.alt)*0.3048);
-        let col=colAr[selLvls.findIndex(lv=>lv.lvl==e.lvl)];
-
-        s+=`
+        if (e.seg[0].pnts.length){  //check if any data,  else ignore
+            let mn=0;
+            let alt=Math.round(Number(e.alt)*0.3048);
+            let garmincol=colAr[selLvls.findIndex(lv=>lv.lvl==e.lvl)];
+            let topografix=selLvls[selLvls.findIndex(lv=>lv.lvl==e.lvl)].col.slice(1);
+            s+=`
     <trk>
         <name>${e.lvl}</name>
-        <desc>Model:${e.model},  Update time:${e.update},  Distance:${Math.round(e.dist)}m,  Time:${Math.round(e.ete/min1)}min,  Av speed:${Math.round((e.dist/10)/(e.ete/h1))/100}kph,  Alt: ${e.alt}ft </desc>`+
-
-        `
+        <desc>Model:${e.model},   Update time:${e.update},   Distance:${Math.round(e.dist)}m,   Time:${Math.round(e.ete/min1)}min,   Av speed:${Math.round((e.dist/10)/(e.ete/h1))/100}kph,   Alt: ${e.alt}ft </desc>
         <extensions>
             <gpxx:TrackExtension xmlns:gpxx="http://www.garmin.com/xmlschemas/GpxExtensions/v3">
-                <gpxx:DisplayColor>${col}</gpxx:DisplayColor>
+                <gpxx:DisplayColor>${garmincol}</gpxx:DisplayColor>
             </gpxx:TrackExtension>
-        </extensions>`+
-
-        `
+            <line xmlns="http://www.topografix.com/GPX/gpx_style/0/2">
+                <color>${topografix}</color>
+                <opacity>1</opacity>
+            </line>
+            <model>${e.model}</model>
+            <update_time>${e.update}</update_time>
+            <distance>${Math.round(e.dist)}</distance>
+            <time_mins>${Math.round(e.ete/min1)}</time_mins>
+            <av_speed_kph>${Math.round((e.dist/10)/(e.ete/h1))/100}</av_speed_kph>
+            <level>${e.lvl}</level>
+            <alt_ft>${e.alt}</alt_ft>
+            <alt_m>${e.altm}</alt_m>
+            <ascent>${ascent}</ascent>
+            <descent>${descent}</descent>
+        </extensions>
         <trkseg>`;
-                    e.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
+            e.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
                         //let t=ej.t;
                             //let tm= new Date(pnt.t).toISOString().slice(0,-5)+"Z";
-                            s+=
+                    s+=
         `
             <trkpt lat="${pnt.lat}" lon="${pnt.lng}">
                 <name>${pnt.lvl+"_"+mn}</name>
                 <time>${pnt.tStr}</time>
                 <ele>${pnt.altm}</ele>
             </trkpt> `;
-                                mn+=pnt.sample;
-                            }
-                    ));
-                    s+=
+                    mn+=pnt.sample;
+            }));
+            s+=
         `
         </trkseg>
     </trk>`;
-                });
-                s+=`
+        }//end if data in pnts
+    });
+    s+=`
 </gpx>`;
 
     let tm= (new Date(traj[0].seg[0].t).toISOString()).slice(0,-5);
