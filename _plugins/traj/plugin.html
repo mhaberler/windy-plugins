@@ -24,7 +24,7 @@
     </div>
 
 <script>
-    let version= "0.3.3";
+    let version= "0.3.5";
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -66,7 +66,7 @@
     let backw=false;
     let metric_wind=store.get("metric_wind");
     let metric_dist=metricDist(metric_wind);
-    let selectedPnt={};
+    let selectedPnt=false;
     store.on("metric_wind",w=>{
         metric_wind=w;
         metric_dist=metricDist(w);
@@ -210,7 +210,8 @@
         datai=Math.floor((ts-reftime-h3/2)/h3);
 
 
-        let startpos=pickerOpen?picker.getParams():selectedPnt;
+        let startpos=pickerOpen?picker.getParams():(selectedPnt?selectedPnt:false);
+
         if (startpos && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
             if (backw && ts<tn+durmin*min1){
                 showMsg(`Backward trajectory<br>Move time forward.`);
@@ -657,6 +658,7 @@
         //infomrkr.setOpacity(0);   Do not use setOpacity,  mrkr hidden but still clickable
         $("#mrkr").style.display="none";
         $("#active-mrkr").style.display="none";
+        selectedPnt=false;
     });
 
     let amicon=L.divIcon({
@@ -702,7 +704,7 @@
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
             store.set("level",pnt.lvl=="1000h"?"100m":pnt.lvl);
-            selectedPnt.lat=pnt.lat; selectedPnt.lon=pnt.lng;       //must be {lat:,lon:}
+            selectedPnt={lat:pnt.lat,lon:pnt.lng};       //must be {lat:,lon:}
             return pnt;
         }
     }
