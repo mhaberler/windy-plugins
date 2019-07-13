@@ -12,7 +12,9 @@
         &nbsp;-&nbsp;Current sample interval is 15 minutes,  ascent and descent phases at 1 min.  <br>
         &nbsp;-&nbsp;Duration slider will show progress. <br>
         &nbsp;-&nbsp;You can create many trajectories.   <br>
+        &nbsp;-&nbsp;The trajectory can also be calculated in reverse,  to find starting point. <br>
         &nbsp;-&nbsp;Clicking a trajectory will switch the map to the correct timestamp and level,  and the marker will show the info at that point. <br>
+        &nbsp;-&nbsp;If the picker is closed,  the trajctory marker will be used if visible,  when clicking "start" <br>
         &nbsp;-&nbsp;PluginDataLoader is used,  will use the model selected (ECMWF, GFS or ICON).<br>  <br>
         <div id="select-colors" style="display:inline-block">
             <span style="font-size:15px; font-weight:bold;">Select Colors:</span><br> <br>
@@ -40,6 +42,8 @@
 		, plugin: 'windy-plugin-da'
 	});
 
+
+    let traj=[];
     let currentlvl;
     let ascent=localStorage.getItem("ascent");
     if (!ascent) ascent=0;
@@ -49,24 +53,28 @@
     if (!durmin) durmin=0;
 
     let pntAlt,pntAltm;
-    let pickerPos;
 
     let reftime;
-    let hrsInt;
     let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;  let d1=24*60*60*1000;   let d6=6*24*60*60*1000;
     let sample=15;
     var sampleAscDes=1;
-    let ts;
+    let ts;            //timestamp
+    let tn=Date.now(); //time now
     let datai;
-    let selpth;
     let startlvl, startmodel;
     let running=false;
+    let backw=false;
     let metric_wind=store.get("metric_wind");
     let metric_dist=metricDist(metric_wind);
+    let selectedPnt={};
     store.on("metric_wind",w=>{
         metric_wind=w;
         metric_dist=metricDist(w);
     });
+
+    let pickerOpen=false;
+    picker.on("pickerClosed",()=>{pickerOpen=false});
+    picker.on("pickerOpened",()=>{pickerOpen=true});
 
     function metricDist(mw){
         switch (mw){
@@ -143,12 +151,7 @@
 
     ////message div
     let msgdiv=document.createElement("div");
-    msgdiv.style.position="absolute";
-    msgdiv.style.fontSize="30px";
-    msgdiv.style.top="30%";
-    msgdiv.style.left="50%";
-    msgdiv.style.color="white";
-    msgdiv.style.transform="translate(-50%,-50%)";
+    msgdiv.classList.add("msg-div");
 
     ////Box at bottom left
     ib(`<div style="box-sizing-border-box; padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
@@ -173,8 +176,9 @@
                 <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:224px; z-index:999; opacity:0;" type="range"  max="96" >
                 <div id="thumb1" class="thumb"></div>
                 <div id="progress-thumb" class="thumb" style="opacity:0" ></div>
+
             </div>
-            <div  style="  width:100px; ">Duration: <span id="duration"></span></div>
+            <div  style="  width:220px; ">Duration: <span id="duration"></span>&nbsp;&nbsp;<span style="font-size:9px">Running <span  id="traj-direction">${backw?"backward - find start":"forward - find end"}</span></span></div>
 
             <div id="open-left-pane" class="start-buttons">
                 Menu
@@ -182,8 +186,11 @@
             <div id="save-gpx" class="start-buttons">
                 Save
             </div>
-            <div id="clear-IP" class="start-buttons">
+            <div id="clear-trajs" class="start-buttons">
                 Clear
+            </div>
+            <div id="backw" class="start-buttons" >
+                ${backw?"Forw":"Back"}
             </div>
             <div id="start-IP" class="start-buttons">
                 Start
@@ -192,26 +199,35 @@
         `,
         "open-left-pane", "windy-plugin-traj", this
     );
+    function showMsg(m){
+        msgdiv.innerHTML=m;
+        document.getElementById("map-container").appendChild(msgdiv);
+        setTimeout(()=>msgdiv.remove(), 2000);
+    }
     $("#start-IP").addEventListener("click",()=>{
         ts=store.get("timestamp");
         startmodel=store.get("product");
         datai=Math.floor((ts-reftime-h3/2)/h3);
-        if (picker.getParams && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
-            drawTraj(picker.getParams());
-            running=true;
-            $("#start-IP").innerHTML="Stop";
-        }  else if (running){running=false;
-        }  else if (!picker.getParams) {
-            msgdiv.innerHTML="Place picker";
-            document.getElementById("map-container").appendChild(msgdiv);
-            setTimeout(()=>msgdiv.remove(), 2000);
+
+
+        let startpos=pickerOpen?picker.getParams():selectedPnt;
+        if (startpos && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
+            if (backw && ts<tn+durmin*min1){
+                showMsg(`Backward trajectory<br>Move time forward.`);
+            } else {
+                drawTraj(startpos);
+                running=true;
+                $("#start-IP").innerHTML="Stop";
+            }
+        }  else if (running){
+            running=false;
+        }  else if (!startpos) {
+            showMsg(`Place Picker`);
         }  else {
-            msgdiv.innerHTML=`Model (${startmodel}) not supported`;
-            document.getElementById("map-container").appendChild(msgdiv);
-            setTimeout(()=>msgdiv.remove(), 2000);
+            showmsg(`Model (${startmodel}) not supported`);
         }
     });
-    $("#clear-IP").addEventListener("click",()=>{
+    $("#clear-trajs").addEventListener("click",()=>{
         traj.forEach(e=>e.seg.forEach(l=>{
             l.line.remove();
             l.ghostline.remove();
@@ -219,6 +235,14 @@
         }));
         traj=[];
     });
+    $("#backw").addEventListener("click",e=>{           ////allow backward traj
+        backw=!backw;
+        let tmp=ascent; ascent=descent; descent=tmp;
+        //e.target.style.opacity=backw?1:0.3;
+        e.target.innerHTML=backw?"Forw":"Back";
+        $("#traj-direction").innerHTML=backw?    "<span style='font-weight:bold'>backward</span> - find start":    "<span style='font-weight:bold'>forward</span> - find end";
+    });
+
      $("#save-gpx").addEventListener("click",()=>{
         saveGPX();
     });
@@ -326,11 +350,11 @@
     }
     startmodel=store.get("product");    getRefTime(startmodel);
 
-    function time2path(t){
-        hrsInt=(startmodel=="ecmwf" && t-reftime>d6)?6:3;
-        let tmshift=new Date(t+hrsInt*30*60*1000);
-        return tmshift.getUTCFullYear()+"/"+("0"+(tmshift.getUTCMonth()+1)).slice(-2)+"/"+("0"+tmshift.getUTCDate()).slice(-2)+"/"+("0"+Math.floor(tmshift.getUTCHours()/hrsInt)*hrsInt).slice(-2);
-    }
+    //function time2path(t){
+    //    hrsInt=(startmodel=="ecmwf" && t-reftime>d6)?6:3;
+    //    let tmshift=new Date(t+hrsInt*30*60*1000);
+    //    return tmshift.getUTCFullYear()+"/"+("0"+(tmshift.getUTCMonth()+1)).slice(-2)+"/"+("0"+tmshift.getUTCDate()).slice(-2)+"/"+("0"+Math.floor(tmshift.getUTCHours()/hrsInt)*hrsInt).slice(-2);
+    //}
 
     function time2index(t){
         let i= Math.floor((t-reftime-h3/2)/h3);
@@ -341,8 +365,6 @@
         let h=(startmodel=="ecmwf" && t-reftime>d6+h3/2)?h3*2:h3;
         return Math.floor(((t-reftime)+h/2)/h)*h;
     }
-
-    let traj=[];
 
     ////highlight time segment   (3 or 6 hours if ecmwf>6 days after reftime)
     store.on("timestamp",e=>{
@@ -371,7 +393,7 @@
 
     function drawTraj(cstart,startt=false,lv=-1){
         let c=cstart;
-        pntAltm=-1;
+        pntAltm=-9999;
 
         if (!startt){
             startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
@@ -404,6 +426,7 @@
             model:startmodel,
             ascent: ascent,
             descent: descent,
+            calcBackward: backw,
             seg:[]
         })-1;
 
@@ -428,7 +451,7 @@
                     store.set("timestamp",nearestPnt.t);
                     ghostmrkr.setLatLng(nearestPnt);
 
-                    selpth=ll.pth;
+                    //selpth=ll.pth;
                     store.set("level",ll.lvl=="1000h"?"100m":ll.lvl);
                     selLvls.forEach(e=>{
                         if(ll.lvl==e.lvl)e.div.style.fontWeight="bold"; else e.div.style.fontWeight="normal";
@@ -451,18 +474,20 @@
                     let smpl=sampleAscDes;
                     let pntElev=data.data.header.elevation
 
+
                     //look for phase and determine next alt.  With start of traj pntAltm=-1
                     if (traj[k].lvl=="surface"){
                         pntAltm=pntElev+10;
                         smpl=sample;
-                        if (t>ts+durmin*min1) endTraj=true;
+                        if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)) endTraj=true;               ////allow backward traj
                     }  else {
-                        if (pntAltm<0){
+                        if (pntAltm==-9999){
                             if (ascent==0){
                                 pntAltm=traj[k].altm; smpl=sample;
                             } else pntAltm=pntElev;
-                        } else if (t>ts+durmin*min1){
-                            if (descent==0 || pntAltm<pntElev) endTraj=true;
+                        } else if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)){    ////allow backward traj
+
+                            if (descent==0 || (pntAltm<pntElev)) endTraj=true;
                             else pntAltm-=descent*smpl*60;
                         } else if (pntAltm<traj[k].altm){
                             pntAltm+=ascent*smpl*60;
@@ -475,7 +500,7 @@
                         }
                     }
 
-                    console.log("Alt(m):",pntAltm);
+                    console.log("Alt(m):",pntAltm, "Elev",pntElev);
 
 
                     if (!endTraj) {
@@ -541,7 +566,7 @@
                          /////////calculate next point,  thx to Chris Veness (github)
                         var ad=d/6371000;//angular distance
                         var rad=Math.PI/180;
-                        var brng=w.dirto*rad;
+                        var brng=(backw?dirfrom:w.dirto)*rad;           ////allow backward traj
                         var lat1=c.lat*rad;
                         var lon1=c.lon*rad;
                         var lat2 = Math.asin(Math.sin(lat1)*Math.cos(ad) + Math.cos(lat1)*Math.sin(ad)*Math.cos(brng))   ;
@@ -573,8 +598,8 @@
                                     .addTo(map)
                         }*/
 
-                        t+=smpl*min1;
-                        if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu")) {
+                        t+=smpl*min1 * (backw?-1:1);              ////allow backward traj
+                        if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu") || t<reftime+(h3/2)) {
                             endTraj=true;
                         }
                     }
@@ -677,6 +702,7 @@
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
             store.set("level",pnt.lvl=="1000h"?"100m":pnt.lvl);
+            selectedPnt.lat=pnt.lat; selectedPnt.lon=pnt.lng;       //must be {lat:,lon:}
             return pnt;
         }
     }
@@ -737,8 +763,9 @@ function saveGPX(){
             <level>${e.lvl}</level>
             <alt_ft>${e.alt}</alt_ft>
             <alt_m>${e.altm}</alt_m>
-            <ascent>${ascent}</ascent>
-            <descent>${descent}</descent>
+            <ascent>${e.calcBackward?e.descent:e.ascent}</ascent>
+            <descent>${e.calcBackward?e.ascent:e.descent}</descent>
+            <calc_backward>${e.calcBackward}</calc_backward>
         </extensions>
         <trkseg>`;
             e.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
