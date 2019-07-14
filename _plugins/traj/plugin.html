@@ -24,7 +24,9 @@
     </div>
 
 <script>
-    let version= "0.3.5";
+    let version= "0.3.7";
+
+    //console.log("favs",W,W.favs.getAll());
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -41,7 +43,6 @@
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
 		, plugin: 'windy-plugin-da'
 	});
-
 
     let traj=[];
     let currentlvl;
@@ -73,6 +74,7 @@
     });
 
     let pickerOpen=false;
+    bcast.fire('rqstClose','picker');
     picker.on("pickerClosed",()=>{pickerOpen=false});
     picker.on("pickerOpened",()=>{pickerOpen=true});
 
@@ -165,7 +167,7 @@
                 <div  style="width:113px;   ">Ascent: <span id="asc_span"></span></div>
             </div>
             <div style="display:inline-block">
-                <div style="margin:0px;position:relative;  display:inline-block; width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
+                <div style="margin:0px;position:relative;  width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
                     <input id="des_range"  step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
                     <div id="thumb_des" class="thumb"></div>
                 </div>
@@ -208,10 +210,7 @@
         ts=store.get("timestamp");
         startmodel=store.get("product");
         datai=Math.floor((ts-reftime-h3/2)/h3);
-
-
         let startpos=pickerOpen?picker.getParams():(selectedPnt?selectedPnt:false);
-
         if (startpos && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
             if (backw && ts<tn+durmin*min1){
                 showMsg(`Backward trajectory<br>Move time forward.`);
@@ -232,7 +231,7 @@
         traj.forEach(e=>e.seg.forEach(l=>{
             l.line.remove();
             l.ghostline.remove();
-            //l.mrkr.forEach(m=>m.remove());
+            l.pnts.forEach(m=>{if(m.mrkr)m.mrkr.remove()});
         }));
         traj=[];
     });
@@ -284,7 +283,6 @@
         } else {
             e.div.style.opacity=0.5; e.div.style.color="white";
         }
-
         e.div.addEventListener("click",el=>{
             if(e.sel){
                 e.div.style.opacity=0.5;
@@ -351,7 +349,7 @@
     }
     startmodel=store.get("product");    getRefTime(startmodel);
 
-    //function time2path(t){
+    //function time2path(t){            ////no longer using the path
     //    hrsInt=(startmodel=="ecmwf" && t-reftime>d6)?6:3;
     //    let tmshift=new Date(t+hrsInt*30*60*1000);
     //    return tmshift.getUTCFullYear()+"/"+("0"+(tmshift.getUTCMonth()+1)).slice(-2)+"/"+("0"+tmshift.getUTCDate()).slice(-2)+"/"+("0"+Math.floor(tmshift.getUTCHours()/hrsInt)*hrsInt).slice(-2);
@@ -392,7 +390,7 @@
         startmodel=model;
     });
 
-    function drawTraj(cstart,startt=false,lv=-1){
+    function drawTraj(cstart,startt=false,lvli=-1){
         let c=cstart;
         pntAltm=-9999;
 
@@ -402,17 +400,17 @@
         }
         $('#progress-thumb').style.opacity=0.4;
 
-        let nextLvl=(lv)=>{
-            for (lv++ ;lv<selLvls.length&&!selLvls[lv].sel ;lv++);
-            return lv<selLvls.length?lv:-1;
+        let nextLvl=(lvli)=>{
+            for (lvli++ ;lvli<selLvls.length&&!selLvls[lvli].sel ;lvli++);
+            return lvli<selLvls.length?lvli:-1;
         }
 
-        if (lv<0){
-            lv=nextLvl(lv);
-            if (lv<0) return;
+        if (lvli<0){
+            lvli=nextLvl(lvli);
+            if (lvli<0) return;
         }
-        let lvl=selLvls[lv].lvl;
-        let col=selLvls[lv].col;
+        let lvl=selLvls[lvli].lvl;
+        let col=selLvls[lvli].col;
 
         if (lvl=="250h"){lvl="300h"; store.set("level",lvl)}
 
@@ -422,8 +420,9 @@
             dist:0,
             ete:0,
             lvl:lvl,
-            alt:selLvls[lv].alt,
-            altm:selLvls[lv].altm,
+            lvli:lvli,
+            alt:selLvls[lvli].alt,
+            altm:selLvls[lvli].altm,
             model:startmodel,
             ascent: ascent,
             descent: descent,
@@ -443,7 +442,7 @@
                 traj[k].seg[j]={
                     line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
                     ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
-                    lvl:lvl, alt:selLvls[lv].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
+                    lvl:lvl,  alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
                 };
                 let ll=traj[k].seg[j];
                 ll.ghostline.on("click",ev=>{
@@ -475,26 +474,26 @@
                     let smpl=sampleAscDes;
                     let pntElev=data.data.header.elevation
 
-
-                    //look for phase and determine next alt.  With start of traj pntAltm=-1
+                    //look for phase and determine next alt.  With start of traj pntAltm=-9999
                     if (traj[k].lvl=="surface"){
                         pntAltm=pntElev+10;
                         smpl=sample;
                         if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)) endTraj=true;               ////allow backward traj
                     }  else {
-                        if (pntAltm==-9999){
-                            if (ascent==0){
+                        if (pntAltm==-9999){ //start
+                            if (ascent==0 || pntElev>=traj[k].altm){
                                 pntAltm=traj[k].altm; smpl=sample;
-                            } else pntAltm=pntElev;
-                        } else if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)){    ////allow backward traj
-
-                            if (descent==0 || (pntAltm<pntElev)) endTraj=true;
+                            } else {
+                                pntAltm=pntElev;
+                            }
+                        } else if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)){    // duration hit,  start descent ////allow backward traj
+                            if (descent==0 || (pntAltm<pntElev)) endTraj=true;  //stop if BGL or none descent selected
                             else pntAltm-=descent*smpl*60;
-                        } else if (pntAltm<traj[k].altm){
+                        } else if (pntAltm<traj[k].altm){     //still rising.
                             pntAltm+=ascent*smpl*60;
-                            if (pntAltm>=traj[k].altm){
+                            if (pntAltm>=traj[k].altm){       //now  altitude reached
                                 pntAltm=traj[k].altm;
-                                smpl=sample;
+                                smpl=backw?(t/min1)%sample : (sample-((t/min1)%sample)); //find next timepoint where (time in min % sample)==0.  Makes it easier to make hour markers.
                             }
                         } else{
                               smpl=sample;
@@ -502,7 +501,6 @@
                     }
 
                     console.log("Alt(m):",pntAltm, "Elev",pntElev);
-
 
                     if (!endTraj) {
                         n+=smpl/15;
@@ -591,13 +589,15 @@
                             sample:smpl
                         });
 
-                        ////leave out hour markers for now.
-                      /*  if (t%h1==0){
+
+
+                        ////hour markers
+                        if (t%h1==0){
                             let tm=t;
                             traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1].mrkr=
-                                 L.circleMarker(c,{radius:2,color:"black", weight:1,  opacity:0.5, interactive:false})
+                                 L.circleMarker(c,{radius:0.5, color:"black", weight:1,  opacity:0.4, interactive:false})
                                     .addTo(map)
-                        }*/
+                        }
 
                         t+=smpl*min1 * (backw?-1:1);              ////allow backward traj
                         if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu") || t<reftime+(h3/2)) {
@@ -608,9 +608,9 @@
                     if (endTraj || !running){
                         store.set("timestamp",startt);
                         $('#progress-thumb').style.opacity=0;
-                        lv=nextLvl(lv);
-                        if (lv>=0 && running){
-                            drawTraj(cstart,startt,lv);
+                        lvli=nextLvl(lvli);
+                        if (lvli>=0 && running){
+                            drawTraj(cstart,startt,lvli);
                         }  else {
                             running=false;
                             $("#start-IP").innerHTML="Start";
