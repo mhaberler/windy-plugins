@@ -24,7 +24,7 @@
 
         let info=document.createElement("div");
         let st={position:"absolute",  marginLeft:"11px", pointerEvents:"none",  width:"100%",  backgroundColor:"transparent",
-                 padding:"3px",  lineHeight:"1.1"};
+                 padding:"3px",  lineHeight:"1.1", whiteSpace:"nowrap"};
         for (let p in st) info.style[p]=st[p];
         info.innerHTML=content;
 

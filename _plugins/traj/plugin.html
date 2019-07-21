@@ -24,9 +24,7 @@
     </div>
 
 <script>
-    let version= "0.3.7";
-
-    //console.log("favs",W,W.favs.getAll());
+    let version= "0.4.5";
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -38,6 +36,7 @@
     import ib from './infobox.mjs';
     import pluginDataLoader from '@windy/pluginDataLoader'
     import metrics from '@windy/metrics';
+    import favs from '@windy/favs';
 
     const load = pluginDataLoader({
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
@@ -59,9 +58,8 @@
     let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;  let d1=24*60*60*1000;   let d6=6*24*60*60*1000;
     let sample=15;
     var sampleAscDes=1;
-    let ts;            //timestamp
+    //let ts;            //timestamp   no longer used
     let tn=Date.now(); //time now
-    let datai;
     let startlvl, startmodel;
     let running=false;
     let backw=false;
@@ -72,6 +70,9 @@
         metric_wind=w;
         metric_dist=metricDist(w);
     });
+
+    let fvs=favs.getAll();
+    let fvsDivs=[];
 
     let pickerOpen=false;
     bcast.fire('rqstClose','picker');
@@ -156,7 +157,7 @@
     msgdiv.classList.add("msg-div");
 
     ////Box at bottom left
-    ib(`<div style="box-sizing-border-box; padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
+    ib(`<div style="box-sizing-border-box;  padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
             <div id="select-levels" style="width:230px; font-size:12px; margin-bottom:8px;"><div style="margin-bottom:5px;font-size:13px">Select Levels</div></div>
 
             <div style="display:inline-block">
@@ -178,7 +179,6 @@
                 <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:224px; z-index:999; opacity:0;" type="range"  max="96" >
                 <div id="thumb1" class="thumb"></div>
                 <div id="progress-thumb" class="thumb" style="opacity:0" ></div>
-
             </div>
             <div  style="  width:220px; ">Duration: <span id="duration"></span>&nbsp;&nbsp;<span style="font-size:9px">Running <span  id="traj-direction">${backw?"backward - find start":"forward - find end"}</span></span></div>
 
@@ -197,7 +197,10 @@
             <div id="start-IP" class="start-buttons">
                 Start
             </div>
+
         </div>
+        <div id="display-fav-div"  class="iconfont">k</div>
+        <div id="fav-div" style="display:none"><span style="font-weight:bold">Click to find fav:</span><br></div>
         `,
         "open-left-pane", "windy-plugin-traj", this
     );
@@ -207,12 +210,10 @@
         setTimeout(()=>msgdiv.remove(), 2000);
     }
     $("#start-IP").addEventListener("click",()=>{
-        ts=store.get("timestamp");
         startmodel=store.get("product");
-        datai=Math.floor((ts-reftime-h3/2)/h3);
         let startpos=pickerOpen?picker.getParams():(selectedPnt?selectedPnt:false);
         if (startpos && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
-            if (backw && ts<tn+durmin*min1){
+            if (backw && (store.get("timestamp")+h1/2)<tn+durmin*min1){
                 showMsg(`Backward trajectory<br>Move time forward.`);
             } else {
                 drawTraj(startpos);
@@ -238,14 +239,21 @@
     $("#backw").addEventListener("click",e=>{           ////allow backward traj
         backw=!backw;
         let tmp=ascent; ascent=descent; descent=tmp;
-        //e.target.style.opacity=backw?1:0.3;
         e.target.innerHTML=backw?"Forw":"Back";
         $("#traj-direction").innerHTML=backw?    "<span style='font-weight:bold'>backward</span> - find start":    "<span style='font-weight:bold'>forward</span> - find end";
     });
-
-     $("#save-gpx").addEventListener("click",()=>{
+    $("#save-gpx").addEventListener("click",()=>{
         saveGPX();
     });
+    $("#display-fav-div").addEventListener("click",()=>{
+        if ($("#fav-div").style.display=="none"){
+            $("#fav-div").style.display="inline-block";
+            $("#display-fav-div").style.opacity=1;
+        }  else {
+            $("#fav-div").style.display="none";
+            $("#display-fav-div").style.opacity=0.4;
+        }
+    })
     function setDur(v){
         $('#thumb1').style.left=210*v/96+'px';
         durmin=v*15;
@@ -314,7 +322,25 @@
         e.input.onkeydown=e=>e.stopPropagation();
         e.input.onchange=e=>{e.target.blur();e.target.focus()}
         $("#select-levels").appendChild(e.div);
+        if (i%2==1){
+            let br=document.createElement("br");
+            $("#select-levels").appendChild(br);
+        }
     })
+
+    ////favourites
+    for (let f in fvs){
+        let d=document.createElement("div");
+        d.innerHTML=fvs[f].name;
+        d.style.padding="3px";
+        d.style.cursor="pointer";
+        d.addEventListener("click",e=>{
+            map.setView(fvs[f]);
+            setTimeout(()=>bcast.fire('rqstOpen','picker',fvs[f]),2000);
+        })
+        fvsDivs.push(d);
+        $("#fav-div").appendChild(d);
+    }
 
     ////color picker
     function cb(col,b,c){
@@ -338,6 +364,9 @@
             displayCallback:cb
         });
     },500);
+
+    ////other settings:
+
 
     ////grab reftime
     function getRefTime(model){
@@ -391,13 +420,17 @@
     });
 
     function drawTraj(cstart,startt=false,lvli=-1){
+
         let c=cstart;
+        console.log(c);
         pntAltm=-9999;
 
         if (!startt){
-            startt= Math.floor((store.get("timestamp")+sample*min1)/(sample*min1))*sample*min1;
+            startt= Math.round((store.get("timestamp"))/(60*min1))*60*min1;
             startlvl=store.get("level");
         }
+        console.log(startt);
+
         $('#progress-thumb').style.opacity=0.4;
 
         let nextLvl=(lvli)=>{
@@ -435,40 +468,53 @@
         let n=0;
 
         let fetchData=(c,t,lvl)=>{
-            let i=time2index(t);  //i refers to index in data array,  3 hourly intervals
             store.set("timestamp",t);
-            if (i!=previ){  //add segment with polyline
-                j++;
-                traj[k].seg[j]={
-                    line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
-                    ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
-                    lvl:lvl,  alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
-                };
-                let ll=traj[k].seg[j];
-                ll.ghostline.on("click",ev=>{
-                    ghostmrkr.k=k;
-                    let nearestPnt=placeInfomrkr(ev.latlng);
-                    store.set("timestamp",nearestPnt.t);
-                    ghostmrkr.setLatLng(nearestPnt);
-
-                    //selpth=ll.pth;
-                    store.set("level",ll.lvl=="1000h"?"100m":ll.lvl);
-                    selLvls.forEach(e=>{
-                        if(ll.lvl==e.lvl)e.div.style.fontWeight="bold"; else e.div.style.fontWeight="normal";
-                    });
-                    traj.forEach(e=>e.seg.forEach(l=>{
-                        if (ll.k==l.k){
-                            if (ll.j==l.j) l.line.setStyle({weight:4, opacity:1});
-                            else l.line.setStyle({weight:2, opacity:0.9});
-                        }else l.line.setStyle({weight:2,opacity:0.4});
-                    }));
-                });
-                previ=i;
-            }
 
             let fetchPoint=c=>{
                 c.model=startmodel;
+                load("forecast",c).then(data=>{
+                    console.log("forecast", data.data.header.refTime);
+                })
                 load('airData',c).then(data=>{
+
+                    console.log(data);
+
+                    console.log(data.data.data.hours[0]);
+                    reftime=new Date(data.data.header.refTime).getTime();
+                    console.log("air",data.data.header.refTime);
+
+                    let i=time2index(t);  //i refers to index in data array,  3 hourly intervals
+                                            //the reftime may change and consequently index value may change.
+                    console.log("index",i);
+
+                    if (i!=previ){  //add segment with polyline
+                        j++;
+                        traj[k].seg[j]={
+                            line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
+                            ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
+                            lvl:lvl,  alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
+                        };
+                        let ll=traj[k].seg[j];
+                        ll.ghostline.on("click",ev=>{
+                            ghostmrkr.k=k;
+                            let nearestPnt=placeInfomrkr(ev.latlng);
+                            store.set("timestamp",nearestPnt.t);
+                            ghostmrkr.setLatLng(nearestPnt);
+
+                            //selpth=ll.pth;
+                            store.set("level",ll.lvl=="1000h"?"100m":ll.lvl);
+                            selLvls.forEach(e=>{
+                                if(ll.lvl==e.lvl)e.div.style.fontWeight="bold"; else e.div.style.fontWeight="normal";
+                            });
+                            traj.forEach(e=>e.seg.forEach(l=>{
+                                if (ll.k==l.k){
+                                    if (ll.j==l.j) l.line.setStyle({weight:4, opacity:1});
+                                    else l.line.setStyle({weight:2, opacity:0.9});
+                                }else l.line.setStyle({weight:2,opacity:0.4});
+                            }));
+                        });
+                        previ=i;
+                    }
 
                     let endTraj=false;
                     let smpl=sampleAscDes;
@@ -476,18 +522,19 @@
 
                     //look for phase and determine next alt.  With start of traj pntAltm=-9999
                     if (traj[k].lvl=="surface"){
-                        pntAltm=pntElev+10;
+                        pntAltm=pntElev;
                         smpl=sample;
-                        if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)) endTraj=true;               ////allow backward traj
+                        if (t>startt+durmin*min1 || (backw && t<startt-durmin*min1)) endTraj=true;               ////allow backward traj
                     }  else {
                         if (pntAltm==-9999){ //start
                             if (ascent==0 || pntElev>=traj[k].altm){
-                                pntAltm=traj[k].altm; smpl=sample;
+                                smpl=sample;
+                                pntAltm=(pntElev>traj[k].altm)?pntElev:traj[k].altm;
                             } else {
                                 pntAltm=pntElev;
                             }
-                        } else if (t>ts+durmin*min1 || (backw && t<ts-durmin*min1)){    // duration hit,  start descent ////allow backward traj
-                            if (descent==0 || (pntAltm<pntElev)) endTraj=true;  //stop if BGL or none descent selected
+                        } else if (t>=startt+durmin*min1 || (backw && t<=startt-durmin*min1)){    // duration hit,  start descent ////allow backward traj
+                            if (descent==0 || (pntAltm<=pntElev+10)) endTraj=true;  //stop if BGL or none descent selected
                             else pntAltm-=descent*smpl*60;
                         } else if (pntAltm<traj[k].altm){     //still rising.
                             pntAltm+=ascent*smpl*60;
@@ -496,36 +543,59 @@
                                 smpl=backw?(t/min1)%sample : (sample-((t/min1)%sample)); //find next timepoint where (time in min % sample)==0.  Makes it easier to make hour markers.
                             }
                         } else{
-                              smpl=sample;
+                            smpl=sample;
+                            if (pntElev>traj[k].altm) pntAltm=pntElev;
                         }
                     }
 
                     console.log("Alt(m):",pntAltm, "Elev",pntElev);
 
+                    traj[k].seg[j].pnts.push({
+                            lat:c.lat,lng:c.lon,
+                            t:t,
+                            tStr: new Date(t).toISOString().slice(0,-5)+"Z",
+                            elev:pntElev,
+                            alt:pntAlt,
+                            altm:pntAltm,
+                            //lvl:w.nearestlvl,
+                            sample:smpl
+                    });
+                    ////hour markers
+                    if (t%h1==0){
+                            let tm=t;
+                            traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1].mrkr=
+                                 L.circleMarker(c,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false})
+                                    .addTo(map)
+                    }
+
                     if (!endTraj) {
                         n+=smpl/15;
                         $('#progress-thumb').style.left=210*n/96+'px';
 
-                        let topi;
-                        for (topi=1; topi<selLvls.length-1 && selLvls[topi].altm<=pntAltm; topi++);
+                        let getWind=(lvli,i)=>{    //let o=utils.wind2obj([u,v,0]);  utils of windy rounds to 10,  thus do not use
+                                let u=data.data.data["wind_u-"+selLvls[lvli].lvl][i];
+                                let v=data.data.data["wind_v-"+selLvls[lvli].lvl][i];
+                                return{
+                                    wind:Math.sqrt(u*u+v*v),
+                                    dirto:Math.floor(180*Math.atan2(u,v)/Math.PI)
+                                }
+                        }
 
-                        let top=selLvls[topi].altm;
-                        let btmi=topi-1;
-                        let btm=selLvls[btmi].altm;
-                        if (selLvls[btmi].altm<pntElev){ btmi=0; btm=pntElev;}
-                        let vrtio= (pntAltm-btm)/(top-btm);
-                        if (vrtio>=1){btmi=topi; vrtio=0;} //if the pntAltm>topmost level,  then make the topmost index btmi and vrtio 0,  so correctly handled by verticalIP.
-                        let getWind=lvli=>{    //let o=utils.wind2obj([u,v,0]);  utils of windy rounds to 10,  thus do not use
-                            let u=data.data.data["wind_u-"+selLvls[lvli].lvl][i];
-                            let v=data.data.data["wind_v-"+selLvls[lvli].lvl][i];
-                            return{
-                                wind:Math.sqrt(u*u+v*v),
-                                dirto:Math.floor(180*Math.atan2(u,v)/Math.PI)
-                            }
+                        let topi,btmi, vrtio;
+                        if (pntAltm>pntElev){
+                            for (topi=1; topi<selLvls.length-1 && selLvls[topi].altm<=pntAltm; topi++);
+                            let top=selLvls[topi].altm;
+                            btmi=topi-1;
+                            let btm=selLvls[btmi].altm;
+                            if (selLvls[btmi].altm<pntElev){btmi=0; btm=pntElev;}
+                            vrtio= (pntAltm-btm)/(top-btm);
+                            if (vrtio>=1){btmi=topi; vrtio=0;} //if the pntAltm>topmost level,  then make the topmost index btmi and vrtio 0,  so correctly handled by verticalIP.
+                        } else {
+                            btmi=lvli;vrtio=0;
                         }
 
                         ////vertical linear interpolation on altitude in meter.  pressure  better???
-                        let verticalIP=(rtio,btmi,topi,i)=>{
+                        let verticalIP=(vrtio,btmi,topi,i)=>{
                             if (vrtio==0 || typeof topi==="undefined"){
                                 let w=getWind(btmi,i);
                                 w.nearestlvl=selLvls[btmi].lvl;
@@ -545,12 +615,14 @@
                         ///interpolate time
                         let w,w2={};
                         let midt=data.data.data.hours[i];
-                        let deltat=midt-t;
-                        if ((deltat<0 && i>0)|| (deltat>0 && i<data.data.data.hours.length-1)){
+                        let deltat=t-midt;
+                        if ((deltat<=0 && i>0)|| (deltat>=0 && i<data.data.data.hours.length-1)){
                             let i2=deltat<0?i-1:i+1;
                             w2=verticalIP(vrtio,btmi,topi,i2);
-                            let trtio=deltat/Math.abs(data.data.data.hours[i]-data.data.data.hours[i2]);
-                            w={wind: w1.wind+(w1.wind-w2.wind)*trtio ,dirto: w1.dirto+(w1.dirto-w2.dirto)*trtio ,nearestlvl:w1.nearestlvl}
+                            let trtio=Math.abs(deltat/(data.data.data.hours[i]-data.data.data.hours[i2]));
+                            let deltadir=(w2.dirto-w1.dirto);
+                            if (deltadir>180)deltadir-=360; else if (deltadir<-180)deltadir+=360;
+                            w={wind: w1.wind+(w2.wind-w1.wind)*trtio ,dirto: w1.dirto+deltadir*trtio ,nearestlvl:w1.nearestlvl}
                         }  else {
                             w=w1;
                         }
@@ -575,29 +647,13 @@
 
                         traj[k].seg[j].line.addLatLng([lat2,lon2]);
                         traj[k].seg[j].ghostline.addLatLng([lat2,lon2]);
-                        traj[k].seg[j].pnts.push({
-                            lat:c.lat,lng:c.lon,
-                            t:t,
-                            tStr: new Date(t).toISOString().slice(0,-5)+"Z",
+
+                        Object.assign(traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1],{
                             d:d,
-                            elev:pntElev,
-                            alt:pntAlt,
-                            altm:pntAltm,
-                            lvl:w.nearestlvl,
                             wind:w.wind,
                             dir:Math.round(dirfrom),
-                            sample:smpl
+                            nearestlvl:w.nearestlvl
                         });
-
-
-
-                        ////hour markers
-                        if (t%h1==0){
-                            let tm=t;
-                            traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1].mrkr=
-                                 L.circleMarker(c,{radius:0.5, color:"black", weight:1,  opacity:0.4, interactive:false})
-                                    .addTo(map)
-                        }
 
                         t+=smpl*min1 * (backw?-1:1);              ////allow backward traj
                         if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu") || t<reftime+(h3/2)) {
@@ -617,7 +673,7 @@
                             console.log("This is the array of polylines and other properties:",traj);
                             store.set("level",startlvl);
                         }
-                    } else setTimeout(fetchData,340,{lat:lat2,lon:lon2},t,lvl);
+                    } else setTimeout(fetchData,740,{lat:lat2,lon:lon2},t,lvl);
                 }).catch(er=>{
                     console.log("usually  blocked by server CORS error - too busy???",   er);  /////usually  blocked by server CORS error - too busy???
                     if (er==0){
@@ -692,14 +748,14 @@
             $("#mrkrLeft").innerHTML=
                 "Model: "+traj[k].model+"<br>"+
                 "Tot Dist: "+metrics.distance.conv[metric_dist].conversion(traj[k].dist).toFixed(2)+metric_dist+"<br>"+
-                "Start: "+traj[k].starttimeStr.replace("T","<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")+"<br>"+
+                "Start: "+traj[k].starttimeStr.replace("T","<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")+"<br>"+
                 "Duration: "+Math.round(traj[k].ete/min1)+"min";
             $("#mrkrRight").innerHTML=
-                "Wind: "+metrics.wind.conv[metric_wind].conversion(pnt.wind).toFixed(2)+metric_wind+"<br>"+
-                "Dir: "+pnt.dir+"<br>"+
+                (pnt.wind?("Wind: "+metrics.wind.conv[metric_wind].conversion(pnt.wind).toFixed(2)+metric_wind+"<br>"):"")+
+                (pnt.dir?("Dir: "+pnt.dir+"<br>"):"")+
                 "Time: "+pnt.tStr.slice(11)+"<br>"+
                 "Alt: "+pnt.altm+"m"+"<br>"+
-                "Lvl: "+pnt.lvl +"<br>"+
+                (pnt.nearestlvl?("Lvl: "+pnt.nearestlvl +"<br>"):"")+
                 "Elev: "+pnt.elev+"m";
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
@@ -776,7 +832,7 @@ function saveGPX(){
                     s+=
         `
             <trkpt lat="${pnt.lat}" lon="${pnt.lng}">
-                <name>${pnt.lvl+"_"+mn}</name>
+                <name>${e.lvl+"_"+mn}</name>
                 <time>${pnt.tStr}</time>
                 <ele>${pnt.altm}</ele>
             </trkpt> `;
