@@ -5,13 +5,7 @@
     import store from '@windy/store';
     import bcast from '@windy/broadcast';
 
-
-
-
-
-
     function makeInfoBox(content,startId,pluginId,_this){  //startId = provide plug in element id to show or hide plugin, on clicking box
-
 
         let hide=()=>{
             let st={visibility: 'hidden',opacity: '0', transition: 'visibility 0s 0.5s, opacity 0.5s linear'};
@@ -33,21 +27,17 @@
             setTimeout(()=>{  //move down if enough space
                 if(info.offsetWidth+20<(window.innerWidth-$("#mobile_box").offsetWidth)/2) info.style.bottom="110px";
             });
-        }
-        else if (rs.isTablet){
-             info.style.bottom=((store.get('overlay')=="radar")?180:110)+"px";
-        }
-        else info.style.bottom=((store.get('overlay')=="radar")?140:70)+"px";
+        } else if (rs.isTablet){
+            info.style.bottom=((store.get('overlay')=="radar")?180:110)+"px";
+        } else info.style.bottom=((store.get('overlay')=="radar")?140:70)+"px";
 
-        if(rs.isMobile) $("#mobile-calendar").appendChild(info);
+        if (rs.isMobile) $("#mobile-calendar").appendChild(info);
         else{
             $('#bottom').appendChild(info);
             store.on('overlay',e=>{
                 info.style.bottom=(rs.isTablet?(e=="radar"?200:110):(e=='radar'?160:70))+"px";
             });
         }
-
-
 
         //if (pluginId)hide();
         if (startId) $("#"+startId).addEventListener("click",()=>{

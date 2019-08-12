@@ -1,30 +1,57 @@
 <plugin>
     <div class="mobile-header" style="font-weight:bold">Trajectory Plugin</div>
-    <div  class="plugin-content">
-        <span id="desktop-title" style="font-size:14px; font-weight:bold;">Trajectory Plugin</span>  <br>  <br>
-        &nbsp;-&nbsp;Place the picker. <br>
-        &nbsp;-&nbsp;Select levels. <br>
-        &nbsp;-&nbsp;Select trajectory duration. <br>
-        &nbsp;-&nbsp;Select Ascent and Descent speed (m/s). <br>
-        &nbsp;-&nbsp;If Ascent or Descent is set at 0, ascent or descent phases will be ignored. <br>
-        &nbsp;-&nbsp;Set start time with Windy slider.   <br>
-        &nbsp;-&nbsp;Start!    <br>
-        &nbsp;-&nbsp;Current sample interval is 15 minutes,  ascent and descent phases at 1 min.  <br>
-        &nbsp;-&nbsp;Duration slider will show progress. <br>
-        &nbsp;-&nbsp;You can create many trajectories.   <br>
-        &nbsp;-&nbsp;The trajectory can also be calculated in reverse,  to find starting point. <br>
-        &nbsp;-&nbsp;Clicking a trajectory will switch the map to the correct timestamp and level,  and the marker will show the info at that point. <br>
-        &nbsp;-&nbsp;If the picker is closed,  the trajctory marker will be used if visible,  when clicking "start" <br>
-        &nbsp;-&nbsp;PluginDataLoader is used,  will use the model selected (ECMWF, GFS or ICON).<br>  <br>
-        <div id="select-colors" style="display:inline-block">
-            <span style="font-size:15px; font-weight:bold;">Select Colors:</span><br> <br>
+    <div id="main" class="plugin-content">
+        <div id="desktop-title" class="title">Trajectory Plugin</div><br>
+
+        <div id="selectlevels-h"  class="heading"><span id="selectlevels-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Levels</div>
+        <div id="selectlevels" style="margin-bottom:10px; display:none"></div>
+
+        <div id="selectmodels-h"  class="heading"><span id="selectmodels-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Models</div>
+        <div id="selectmodels" style="margin-bottom:10px; display:none"></div>
+
+        <div id="settings-h"  class="heading"><span id="settings-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Settings</div>
+        <div id="settings" style="margin-bottom:10px; display:none">
+            <div id="setting-ascent"><span class="settings-fld">Ascent: <span id="asc-val"></span></span></div>
+            <div id="setting-descent"><span class="settings-fld">Descent: <span id="des-val"></span></span></div>
+            <div id="setting-setdur"><span class="settings-fld">Duration: <span id="setdur-val"></span></span></div>
+            <div id="setting-maxdur"><span class="settings-fld">Max duration: <span id="maxdur-val"></span>h</span></div>
+            <div id="setting-sample"><span class="settings-fld" style="width:150px">Sample (Level): <span id="sample-val"></span></span></div>
+            <div id="setting-sampleAscDes"><span class="settings-fld" style="width:150px">Sample (Asc/Des): <span id="sampleAscDes-val"></span></span></div>
         </div>
-        <div id="colpick" style="position:relative;display:inline-block; vertical-align:top;"></div>
+
+        <div id="selectcolors-h" class="heading"><span id="selectcolors-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Colors</div>
+        <div id="selectcolors" style="margin-bottom:10px; position:relative; display:none">
+            <div id="col-content" style="display:inline-block">  </div>
+            <div id="colpick" style="position:relative; display:inline-block; vertical-align:top;"></div>
+        </div>
+
+        <div id="about-h" class="heading"><span id="about-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;About</div>
+        <div id="about" style="margin-bottom:10px; display:none">
+            &nbsp;-&nbsp;Place the picker. <br>
+            &nbsp;-&nbsp;Select levels. <br>
+            &nbsp;-&nbsp;Select trajectory duration. <br>
+            &nbsp;-&nbsp;Select Ascent and Descent speed (m/s). <br>
+            &nbsp;-&nbsp;If Ascent or Descent is set at 0, ascent or descent phases will be ignored. <br>
+            &nbsp;-&nbsp;Set start time with Windy slider.   <br>
+            &nbsp;-&nbsp;Start!    <br>
+            &nbsp;-&nbsp;Current sample interval is 15 minutes,  ascent and descent phases at 1 min.  <br>
+            &nbsp;-&nbsp;Duration slider will show progress. <br>
+            &nbsp;-&nbsp;You can create many trajectories.   <br>
+            &nbsp;-&nbsp;The trajectory can also be calculated in reverse,  to find starting point. <br>
+            &nbsp;-&nbsp;Clicking a trajectory will switch the map to the correct timestamp and level,  and the marker will show the info at that point. <br>
+            &nbsp;-&nbsp;If the picker is closed,  the trajctory marker will be used if visible,  when clicking "start" <br>
+            &nbsp;-&nbsp;PluginDataLoader is used,  will use the model selected (ECMWF, GFS or ICON).<br>
+        </div>
+
         <div style="font-size:10px;margin-top:15px">Settings will be stored in localStorage on your browser.</div>
     </div>
 
 <script>
-    let version= "0.4.5";
+    let version= "0.5.0";
+
+    //console.log(W);
+    bcast.on("pluginOpened",console.log);
+    setTimeout(()=>console.log(store),4000);
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -40,8 +67,9 @@
 
     const load = pluginDataLoader({
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
-		, plugin: 'windy-plugin-da'
+		, plugin: 'windy-plugin-traj'
 	});
+
 
     let traj=[];
     let currentlvl;
@@ -51,13 +79,21 @@
     if (!descent) descent=0;
     let durmin=localStorage.getItem("durmin");
     if (!durmin) durmin=0;
+    let maxdur=localStorage.getItem("maxdur");
+    if (!maxdur) maxdur=720;
+    let menuOpen=JSON.parse(localStorage.getItem("menuOpen"));
+    if (!menuOpen)
+        menuOpen={selectlevels:false, about:false,settings:false,selectcolors:false};
+    let sample=Number(localStorage.getItem("sample"));
+    if (!sample)sample=15;
+    var sampleAscDes=Number(localStorage.getItem("sampleAscDes"));
+    if (!sampleAscDes)sampleAscDes=1;
 
     let pntAlt,pntAltm;
 
     let reftime;
     let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;  let d1=24*60*60*1000;   let d6=6*24*60*60*1000;
-    let sample=15;
-    var sampleAscDes=1;
+
     //let ts;            //timestamp   no longer used
     let tn=Date.now(); //time now
     let startlvl, startmodel;
@@ -73,11 +109,30 @@
 
     let fvs=favs.getAll();
     let fvsDivs=[];
+    let lvlsetbyplugin=false;
 
     let pickerOpen=false;
     bcast.fire('rqstClose','picker');
-    picker.on("pickerClosed",()=>{pickerOpen=false});
-    picker.on("pickerOpened",()=>{pickerOpen=true});
+    picker.on("pickerClosed",()=>{console.log("Picker closed");pickerOpen=false});
+    picker.on("pickerOpened",()=>{console.log("Picker open");pickerOpen=true});
+    bcast.on("pluginOpened",e=>{if (e=="picker") pickerOpen=true});
+
+
+    function menuToggle(c){
+        $("#"+c).style.display=menuOpen[c]?"block":"none";
+        $("#"+c+"-ar").innerHTML=menuOpen[c]?"&#9661;":"&#9655;";
+        if ($("#settings").style.display=="block") placeThumbs();
+        localStorage.setItem("menuOpen",JSON.stringify(menuOpen));
+    }
+    setTimeout(()=>{for(let n in menuOpen)menuToggle(n)},500);
+    let hdg=document.getElementsByClassName("heading");
+    for (let i=0; i<hdg.length; i++){
+        hdg[i].addEventListener("click",e=>{
+            let n=e.target.id.slice(0,-2);
+            menuOpen[n]=!menuOpen[n];
+            menuToggle(n);
+        });
+    }
 
     function metricDist(mw){
         switch (mw){
@@ -151,18 +206,21 @@
                 //col:"rgba(255, 255, 255, 1)"}
                 col:"#FFFFFF"}
     ];
+    let selModels=JSON.parse(localStorage.getItem("selModels"));
+    if(!selModels)selModels=[{m:"ecmwf",sel:true},{m:"gfs",sel:true},{m:"iconEu",sel:true}];
 
     ////message div
     let msgdiv=document.createElement("div");
     msgdiv.classList.add("msg-div");
 
     ////Box at bottom left
-    ib(`<div style="box-sizing-border-box;  padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">
-            <div id="select-levels" style="width:230px; font-size:12px; margin-bottom:8px;"><div style="margin-bottom:5px;font-size:13px">Select Levels</div></div>
+    ib(`<div style="box-sizing-border-box;  padding:5px 5px 3px 5px; display:inline-block; pointer-events:auto; border-radius:7px; background-color:rgba(0,0,0,0.5); border:  1px solid rgba(0,0,0,0.6); font-size:13px;">`
 
+     /*
+        +`<div id="select-levels" style="width:230px; font-size:12px; margin-bottom:8px;"><div style="margin-bottom:5px;font-size:13px">Select Levels</div></div>
             <div style="display:inline-block">
                 <div style="margin:0px;position:relative; width:113px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
-                    <input id="asc_range" step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:107px; z-index:999; opacity:0;" type="range"  max="8" >
+                    <input id="asc_range" step="0.1" style="left:3px; height:20px; top:-1px; position:absolute;  width:calc(100% - 6px); z-index:999; opacity:0;" type="range"  max="8" >
                     <div id="thumb_asc" class="thumb"></div>
                 </div>
                 <div  style="width:113px;   ">Ascent: <span id="asc_span"></span></div>
@@ -173,14 +231,15 @@
                     <div id="thumb_des" class="thumb"></div>
                 </div>
                 <div  style="width:113px;   ">Descent: <span id="des_span"></span></div>
-            </div>
+            </div>`
+*/
 
-            <div style="position:relative; width:230px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
-                <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:224px; z-index:999; opacity:0;" type="range"  max="96" >
-                <div id="thumb1" class="thumb"></div>
+        +`   <div style="position:relative; width:200px; height:20px;  border-radius:8px; border:1px solid rgba(255,255,255,0.5);">
+                <input id="dur_range" style="left:3px; height:20px; top:-1px; position:absolute;  width:calc(100% - 6px); z-index:999; opacity:0;" type="range" step="${sample}" max="${maxdur}" >
                 <div id="progress-thumb" class="thumb" style="opacity:0" ></div>
             </div>
-            <div  style="  width:220px; ">Duration: <span id="duration"></span>&nbsp;&nbsp;<span style="font-size:9px">Running <span  id="traj-direction">${backw?"backward - find start":"forward - find end"}</span></span></div>
+
+            <div  style="  width:220px; ">Progress: <span id="duration"></span>&nbsp;&nbsp;<span style="font-size:9px">Running <span  id="traj-direction">${backw?"backward - find start":"forward - find end"}</span></span></div>
 
             <div id="open-left-pane" class="start-buttons">
                 Menu
@@ -200,10 +259,140 @@
 
         </div>
         <div id="display-fav-div"  class="iconfont">k</div>
-        <div id="fav-div" style="display:none"><span style="font-weight:bold">Click to find fav:</span><br></div>
+        <div id="fav-div" style="display:none;max-height: 200px; overflow-y: auto;"><span style="font-weight:bold">Click to find fav:</span><br></div>
         `,
         "open-left-pane", "windy-plugin-traj", this
     );
+
+    function RangeEl(w,mx,mn,stp,outdiv,iv2rv=false,rv2iv=false,rv2st=false,cb=false){
+        this.wrap=document.createElement("div");
+        this.wrap.classList.add("rangeWrap");
+        this.wrap.style.width=w;
+        this.input=document.createElement("input");
+        this.input.type="range";
+        this.input.max=mx;
+        this.input.min=mn;
+        this.input.step=stp;
+        this.input.classList.add("rangeInput");
+        this.thumb=document.createElement("div");
+        this.thumb.classList.add("thumb");
+        this.wrap.appendChild(this.input);
+        this.wrap.appendChild(this.thumb);
+        this.outdiv=outdiv;
+
+        this.appendTo= function(e){
+            console.log(this);
+            e.appendChild(this.wrap)
+        };
+        this.setThumb=function(v){
+            let offsetw=this.wrap.offsetWidth;
+            console.log("VALUE",v,"OFFSETW",offsetw);
+            this.thumb.style.left=((offsetw-20)*v/this.input.max)+"px";
+        }
+        this.calcRangeVal=function(iv){
+            let rv=iv2rv?iv2rv(iv):iv;
+            this.rangeValue=rv;
+            this.outdiv.innerHTML=rv2st?rv2st(rv):rv;
+            if (cb) cb(rv);
+        }
+        this.calcInputVal=function(rv){//and place thumb
+            this.outdiv.innerHTML=rv2st?rv2st(rv):rv;
+            let iv=rv2iv?rv2iv(rv):rv;
+            //console.log("RV",rv,"IV",iv);
+            //console.log(iv.indexOf(rv));
+            this.input.value=iv;
+            this.setThumb(iv);
+        }
+        this.input.addEventListener("input",e=>{
+            this.setThumb(e.target.value);
+            this.calcRangeVal(e.target.value);
+        });
+    }
+
+    let maxDurRange=new RangeEl("calc(100% - 130px)",240,0,2, $("#maxdur-val"),
+        v=>v,v=>v,v=>v,
+        v=>{
+            maxdur=v*60;
+            setDurRange.input.max=maxdur;
+            if (durmin>maxdur)durmin=maxdur;
+            setDurRange.calcInputVal(durmin);
+            localStorage.setItem("durmin",durmin);
+            localStorage.setItem("maxdur",maxdur);
+        }
+    );
+    maxDurRange.appendTo($("#setting-maxdur"));
+
+    let setDurRange=new RangeEl("calc(100% - 130px)",maxdur,0,sample, $("#setdur-val"),
+        v=>v, v=>v, rv=>('0'+Math.floor(rv/60)).slice((rv/60)>99?-3:-2)+':'+('0'+ rv%60).slice(-2),
+        v=>{
+            durmin=v;
+            localStorage.setItem("durmin",durmin);
+        }
+    );
+    setDurRange.appendTo($("#setting-setdur"));
+
+    let ascRange=new RangeEl("calc(100% - 130px)",8,0,0.1, $("#asc-val"),
+        v=>v, v=>v, rv=>rv?(rv+ "m/s"):"None",
+        v=>{
+            ascent=v;
+            localStorage.setItem("ascent",ascent);
+        }
+    );
+    ascRange.appendTo($("#setting-ascent"));
+
+    let decRange=new RangeEl("calc(100% - 130px)",8,0,0.1, $("#des-val"),
+        v=>v, v=>v, rv=>rv?(rv+ "m/s"):"None",
+        v=>{
+            descent=v;
+            localStorage.setItem("descent",descent);
+        }
+    );
+    decRange.appendTo($("#setting-descent"));
+
+    let sampleOpts=[5,10,15,20,30,60,120];
+    let sampleRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#sample-val"),
+        v=>sampleOpts[v], v=>sampleOpts.indexOf(v), rv=>(rv+ "min"),
+        v=>{
+            sample=v;
+            localStorage.setItem("sample",sample);
+            setDurRange.input.step=sample;
+        }
+    );
+    sampleRange.appendTo($("#setting-sample"));
+
+    let sampleOptsAD=[0.5,1,2,3,5,10,15];
+    let sampleAscDesRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#sampleAscDes-val"),
+        v=>sampleOptsAD[v], v=>sampleOptsAD.indexOf(v), rv=>(rv+ "min"),
+        v=>{
+            sampleAscDes=v;
+            localStorage.setItem("sampleAscDes",sampleAscDes);
+        }
+    );
+    sampleAscDesRange.appendTo($("#setting-sampleAscDes"));
+
+
+    function placeThumbs(){
+        maxDurRange.calcInputVal(Math.round(maxdur/60));
+        setDurRange.calcInputVal(durmin);
+        ascRange.calcInputVal(ascent);
+        decRange.calcInputVal(descent);
+        sampleRange.calcInputVal(sample);
+        sampleAscDesRange.calcInputVal(sampleAscDes);
+    }
+
+    /*function setDes(v){
+        $('#thumb_des').style.left=93*v/8+'px';
+        descent=v;
+        if (descent==0) $('#des_span').innerHTML="None";
+        else $('#des_span').innerHTML=descent+" m/s";
+        localStorage.setItem("descent",descent);
+    }*/
+    //$("#dur_range").addEventListener("input",e=>setDur(e.target.value));
+    //$("#asc_range").addEventListener("input",e=>setAsc(e.target.value));
+    //$("#des_range").addEventListener("input",e=>setDes(e.target.value));
+    //setAsc(ascent);  setDes(descent);
+
+
     function showMsg(m){
         msgdiv.innerHTML=m;
         document.getElementById("map-container").appendChild(msgdiv);
@@ -212,7 +401,14 @@
     $("#start-IP").addEventListener("click",()=>{
         startmodel=store.get("product");
         let startpos=pickerOpen?picker.getParams():(selectedPnt?selectedPnt:false);
-        if (startpos && !running && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
+        if (!startpos){
+            let c;
+            if (W.detail.hasOwnProperty("loadedData")){
+                c=W.detail.loadedData.header;
+                console.log(c);
+            }
+        }
+        if (startpos && !running){// && (startmodel=="ecmwf" ||  startmodel=="gfs" || startmodel=="iconEu"))  {
             if (backw && (store.get("timestamp")+h1/2)<tn+durmin*min1){
                 showMsg(`Backward trajectory<br>Move time forward.`);
             } else {
@@ -225,7 +421,7 @@
         }  else if (!startpos) {
             showMsg(`Place Picker`);
         }  else {
-            showmsg(`Model (${startmodel}) not supported`);
+            showMsg(`Model (${startmodel}) not supported`);
         }
     });
     $("#clear-trajs").addEventListener("click",()=>{
@@ -254,46 +450,58 @@
             $("#display-fav-div").style.opacity=0.4;
         }
     })
-    function setDur(v){
-        $('#thumb1').style.left=210*v/96+'px';
-        durmin=v*15;
-        $('#duration').innerHTML=('0'+Math.floor(durmin/60)).slice(-2)+':'+('0'+ durmin%60).slice(-2);
-        localStorage.setItem("durmin",durmin/15);
-    }
-    function setAsc(v){
-        $('#thumb_asc').style.left=93*v/8+'px';
-        ascent=v;
-        if (ascent==0) $('#asc_span').innerHTML="None";
-        else $('#asc_span').innerHTML=ascent+" m/s";
-        localStorage.setItem("ascent",ascent);
-    }
-    function setDes(v){
-        $('#thumb_des').style.left=93*v/8+'px';
-        descent=v;
-        if (descent==0) $('#des_span').innerHTML="None";
-        else $('#des_span').innerHTML=descent+" m/s";
-        localStorage.setItem("descent",descent);
-    }
-    $("#dur_range").addEventListener("input",e=>setDur(e.target.value));
-    $("#asc_range").addEventListener("input",e=>setAsc(e.target.value));
-    $("#des_range").addEventListener("input",e=>setDes(e.target.value));
-    setDur(durmin); setAsc(ascent);  setDes(descent);
+
 
     if (rs.isMobile)$("#desktop-title").style.display="none";
     if (rs.isTablet){$("#logo").style.left="100%"; $("#logo").style.marginLeft="-150px";}
 
-    selLvls.forEach((e,i)=>{
+    selModels.forEach((e,i)=>{
         e.div=document.createElement("div");
-        e.div.innerHTML=e.lvl+" "+(e.alt<10000?(e.alt+"ft"):(e.alt/100+"FL"));
-        e.div.style.display="inline-block";  e.div.style.width="115px";
+        e.div.innerHTML=e.m;
+        e.div.style.display="inline-block";  e.div.style.marginLeft="25px"; e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
         if (e.sel){
-            e.div.style.opacity=1; e.div.style.color=e.col;
+            e.div.style.opacity=1;
+            e.div.style.color="yellow";
         } else {
-            e.div.style.opacity=0.5; e.div.style.color="white";
+            e.div.style.opacity=0.25;
+            e.div.style.color="white";
         }
         e.div.addEventListener("click",el=>{
             if(e.sel){
-                e.div.style.opacity=0.5;
+                e.div.style.opacity=0.25;
+                e.sel=false;
+            } else {
+                if (store.get("visibleProducts").indexOf(e.m)!=-1){
+                    e.div.style.opacity=1;
+                    e.div.style.color="yellow";
+                    e.sel=true;
+                } else {
+                    e.div.innerHTML=e.m+" is unavailable here";
+                    setTimeout(()=>e.div.innerHTML=e.m,3000);
+                    e.div.style.color="white";
+                }
+            }
+            localStorage.setItem("selModels",JSON.stringify(selModels));
+        });
+        e.div.addEventListener("mouseover",el=>{e.div.style.backgroundColor="black"});
+        e.div.addEventListener("mouseout",el=>{e.div.style.backgroundColor="transparent"});
+        $("#selectmodels").appendChild(e.div);
+        let br=document.createElement("br");
+        $("#selectmodels").appendChild(br);
+    })
+
+    selLvls.forEach((e,i)=>{
+        e.div=document.createElement("div");
+        e.div.innerHTML=`<span class="lvlspan">${e.lvl}</span><span class="lvlspan">${(e.alt<10000?(e.alt+"ft"):(e.alt/100+"FL"))}</span><span class="lvlspan" style="width:auto">${e.altm}m</span>`;
+        e.div.style.display="inline-block";  e.div.style.marginLeft="25px"; e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
+        if (e.sel){
+            e.div.style.opacity=1; e.div.style.color=e.col;
+        } else {
+            e.div.style.opacity=0.25; e.div.style.color="white";
+        }
+        e.div.addEventListener("click",el=>{
+            if(e.sel){
+                e.div.style.opacity=0.25;
                 e.sel=false;
                 e.div.style.color="white";
             } else {
@@ -303,9 +511,11 @@
             }
             localStorage.setItem("selLvls",JSON.stringify(selLvls));
         });
+        e.div.addEventListener("mouseover",el=>{e.div.style.backgroundColor="black"});
+        e.div.addEventListener("mouseout",el=>{e.div.style.backgroundColor="transparent"});
 
         let lbl=document.createElement("div");  lbl.innerHTML="<span style='display:inline-block;width:50px'>"+e.lvl+"</span>";
-        $("#select-colors").appendChild(lbl);
+        $("#col-content").appendChild(lbl);
         e.input=document.createElement("input");
         e.input.type="text";
         e.input.value=e.col;
@@ -321,11 +531,11 @@
         }
         e.input.onkeydown=e=>e.stopPropagation();
         e.input.onchange=e=>{e.target.blur();e.target.focus()}
-        $("#select-levels").appendChild(e.div);
-        if (i%2==1){
-            let br=document.createElement("br");
-            $("#select-levels").appendChild(br);
-        }
+        $("#selectlevels").appendChild(e.div);
+
+        let br=document.createElement("br");
+        $("#selectlevels").appendChild(br);
+
     })
 
     ////favourites
@@ -335,6 +545,8 @@
         d.style.padding="3px";
         d.style.cursor="pointer";
         d.addEventListener("click",e=>{
+            fvsDivs.forEach(dd=>dd.style.fontWeight="normal");
+            d.style.fontWeight="bold";
             map.setView(fvs[f]);
             setTimeout(()=>bcast.fire('rqstOpen','picker',fvs[f]),2000);
         })
@@ -404,10 +616,15 @@
     });
 
     store.on("level",lvl=>{
-        selLvls.forEach(e=>{
-            e.div.style.fontWeight= e.lvl==lvl?"bold":"normal";
-        })
-        if(lvl=="100m")lvl="1000h";
+        if(lvl=="100m")lvl="1000h"; else if (lvl=="250h")lvl="300h";
+        if (lvlsetbyplugin){
+            lvlsetbyplugin=false;
+        } else {
+            selLvls.forEach(e=>{
+                e.div.style.fontWeight= e.lvl==lvl?"bold":"normal";
+            });
+
+        }
         currentlvl=lvl;
         traj.forEach(e=>e.seg.forEach(l=>{
             if (l.lvl==lvl)l.line.setStyle({opacity:1});
@@ -415,39 +632,49 @@
         }));
     });
 
-    store.on("product",model=>{
-        startmodel=model;
-    });
 
-    function drawTraj(cstart,startt=false,lvli=-1){
+
+
+
+    function drawTraj(cstart,startt=false,lvli=-1,mdli=-1){
 
         let c=cstart;
-        console.log(c);
         pntAltm=-9999;
 
         if (!startt){
             startt= Math.round((store.get("timestamp"))/(60*min1))*60*min1;
             startlvl=store.get("level");
+            startmodel=store.get("product");
         }
-        console.log(startt);
 
-        $('#progress-thumb').style.opacity=0.4;
+        $('#progress-thumb').style.opacity=1;
 
         let nextLvl=(lvli)=>{
             for (lvli++ ;lvli<selLvls.length&&!selLvls[lvli].sel ;lvli++);
             return lvli<selLvls.length?lvli:-1;
         }
-
         if (lvli<0){
             lvli=nextLvl(lvli);
             if (lvli<0) return;
         }
+        let nextMdl=(mdli)=>{
+            for (mdli++ ;mdli<selModels.length&&!selModels[mdli].sel ;mdli++);
+            return mdli<selModels.length?mdli:-1;
+        }
+        if (mdli<0){
+            mdli=nextMdl(mdli);
+            if (mdli<0) return;
+        }
+
         let lvl=selLvls[lvli].lvl;
         let col=selLvls[lvli].col;
 
-        if (lvl=="250h"){lvl="300h"; store.set("level",lvl)}
+        store.set("level",lvl=="1000h"?(startmodel=="iconEu"?"surface":"100m"):lvl);
+        store.set("product",selModels[mdli].m);
+        console.log("set to model", selModels[mdli].m);
 
         traj.forEach(e=>e.seg.forEach(l=>l.line.setStyle({opacity:0.4})));
+
         let k=traj.push({
             starttimeStr:new Date(startt).toISOString().slice(0,-5)+"Z",
             dist:0,
@@ -456,7 +683,7 @@
             lvli:lvli,
             alt:selLvls[lvli].alt,
             altm:selLvls[lvli].altm,
-            model:startmodel,
+            model:selModels[mdli].m,
             ascent: ascent,
             descent: descent,
             calcBackward: backw,
@@ -470,39 +697,40 @@
         let fetchData=(c,t,lvl)=>{
             store.set("timestamp",t);
 
+            console.log(selModels[mdli].m);
             let fetchPoint=c=>{
-                c.model=startmodel;
-                load("forecast",c).then(data=>{
-                    console.log("forecast", data.data.header.refTime);
-                })
+                c.model=selModels[mdli].m;
+                //load("forecast",c).then(data=>{
+                    //console.log("forecast", data.data.header.refTime);
+                //})
                 load('airData',c).then(data=>{
 
                     console.log(data);
-
-                    console.log(data.data.data.hours[0]);
                     reftime=new Date(data.data.header.refTime).getTime();
-                    console.log("air",data.data.header.refTime);
+                    //console.log("air",data.data.header.refTime);
 
-                    let i=time2index(t);  //i refers to index in data array,  3 hourly intervals
+                    let i=time2index(t);    //i refers to index in data array,  3 hourly intervals
                                             //the reftime may change and consequently index value may change.
-                    console.log("index",i);
 
                     if (i!=previ){  //add segment with polyline
                         j++;
                         traj[k].seg[j]={
                             line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
                             ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
-                            lvl:lvl,  alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
+                            lvl:lvl, model:selModels[mdli].m, alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
                         };
                         let ll=traj[k].seg[j];
                         ll.ghostline.on("click",ev=>{
                             ghostmrkr.k=k;
                             let nearestPnt=placeInfomrkr(ev.latlng);
                             store.set("timestamp",nearestPnt.t);
+                            store.set("product",ll.model);
+
                             ghostmrkr.setLatLng(nearestPnt);
 
                             //selpth=ll.pth;
-                            store.set("level",ll.lvl=="1000h"?"100m":ll.lvl);
+                            lvlsetbyplugin=true;
+                            store.set("level",ll.lvl=="1000h"?(ll.model=="iconEu"?"surface":"100m"):ll.lvl);
                             selLvls.forEach(e=>{
                                 if(ll.lvl==e.lvl)e.div.style.fontWeight="bold"; else e.div.style.fontWeight="normal";
                             });
@@ -548,7 +776,7 @@
                         }
                     }
 
-                    console.log("Alt(m):",pntAltm, "Elev",pntElev);
+                    //console.log("Alt(m):",pntAltm, "Elev",pntElev);
 
                     traj[k].seg[j].pnts.push({
                             lat:c.lat,lng:c.lon,
@@ -569,15 +797,16 @@
                     }
 
                     if (!endTraj) {
-                        n+=smpl/15;
-                        $('#progress-thumb').style.left=210*n/96+'px';
+                        n+=smpl;
+                        let tpos=180*n/durmin; if (tpos>180)tpos=180;
+                        $('#progress-thumb').style.left= (backw?180-tpos:tpos)+"px";
 
                         let getWind=(lvli,i)=>{    //let o=utils.wind2obj([u,v,0]);  utils of windy rounds to 10,  thus do not use
                                 let u=data.data.data["wind_u-"+selLvls[lvli].lvl][i];
                                 let v=data.data.data["wind_v-"+selLvls[lvli].lvl][i];
                                 return{
                                     wind:Math.sqrt(u*u+v*v),
-                                    dirto:Math.floor(180*Math.atan2(u,v)/Math.PI)
+                                    dirto:(Math.floor(180*Math.atan2(u,v)/Math.PI)+360)%360
                                 }
                         }
 
@@ -598,6 +827,7 @@
                         let verticalIP=(vrtio,btmi,topi,i)=>{
                             if (vrtio==0 || typeof topi==="undefined"){
                                 let w=getWind(btmi,i);
+                                //console.log(w);
                                 w.nearestlvl=selLvls[btmi].lvl;
                                 return w;
                             } else {
@@ -619,10 +849,13 @@
                         if ((deltat<=0 && i>0)|| (deltat>=0 && i<data.data.data.hours.length-1)){
                             let i2=deltat<0?i-1:i+1;
                             w2=verticalIP(vrtio,btmi,topi,i2);
+                            //console.log("wind1:",w1.wind.toFixed(2),w1.dirto);console.log( "wind2:",w2.wind.toFixed(2),w2.dirto);
                             let trtio=Math.abs(deltat/(data.data.data.hours[i]-data.data.data.hours[i2]));
+                            //console.log(trtio);
                             let deltadir=(w2.dirto-w1.dirto);
-                            if (deltadir>180)deltadir-=360; else if (deltadir<-180)deltadir+=360;
-                            w={wind: w1.wind+(w2.wind-w1.wind)*trtio ,dirto: w1.dirto+deltadir*trtio ,nearestlvl:w1.nearestlvl}
+                            if (deltadir>180)deltadir=deltadir-360; else if (deltadir<-180)deltadir=deltadir+360;
+                            w={wind: w1.wind+(w2.wind-w1.wind)*trtio ,dirto: ((w1.dirto+deltadir*trtio)+360)%360 ,nearestlvl:w1.nearestlvl}
+                            //console.log("IP:",w.wind.toFixed(2),Math.round(w.dirto));
                         }  else {
                             w=w1;
                         }
@@ -656,7 +889,7 @@
                         });
 
                         t+=smpl*min1 * (backw?-1:1);              ////allow backward traj
-                        if (t>reftime+d1*10 || (t>reftime+d1*5 && startmodel=="iconEu") || t<reftime+(h3/2)) {
+                        if (t>reftime+d1*10 || (t>reftime+d1*5 && selModels[mdli].m=="iconEu") || t<reftime+(h3/2)) {
                             endTraj=true;
                         }
                     }
@@ -666,14 +899,21 @@
                         $('#progress-thumb').style.opacity=0;
                         lvli=nextLvl(lvli);
                         if (lvli>=0 && running){
-                            drawTraj(cstart,startt,lvli);
+                            drawTraj(cstart,startt,lvli,mdli);
                         }  else {
-                            running=false;
-                            $("#start-IP").innerHTML="Start";
-                            console.log("This is the array of polylines and other properties:",traj);
-                            store.set("level",startlvl);
+                            mdli=nextMdl(mdli);
+                            if (mdli>=0 && running) {
+                                //lvli=nextLvl(-1);
+                                drawTraj(cstart,startt,-1,mdli);
+                            } else {
+                                running=false;
+                                $("#start-IP").innerHTML="Start";
+                                console.log("This is the array of polylines and other properties:",traj);
+                                store.set("level",startlvl);
+                                store.set("product",startmodel);
+                            }
                         }
-                    } else setTimeout(fetchData,740,{lat:lat2,lon:lon2},t,lvl);
+                    } else setTimeout(fetchData,340,{lat:lat2,lon:lon2},t,lvl);
                 }).catch(er=>{
                     console.log("usually  blocked by server CORS error - too busy???",   er);  /////usually  blocked by server CORS error - too busy???
                     if (er==0){
@@ -687,7 +927,6 @@
             fetchPoint(c);
         }
         if(lvl){
-            store.set("level",lvl=="1000h"?"100m":lvl);
             fetchData(c,startt,lvl);
         }
     }
@@ -759,7 +998,7 @@
                 "Elev: "+pnt.elev+"m";
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
-            store.set("level",pnt.lvl=="1000h"?"100m":pnt.lvl);
+            store.set("level",pnt.lvl=="1000h"?(startmodel=="iconEu"?"surface":"100m"):pnt.lvl);
             selectedPnt={lat:pnt.lat,lon:pnt.lng};       //must be {lat:,lon:}
             return pnt;
         }
