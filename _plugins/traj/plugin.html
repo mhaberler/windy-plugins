@@ -17,6 +17,8 @@
             <div id="setting-maxdur"><span class="settings-fld">Max duration: <span id="maxdur-val"></span>h</span></div>
             <div id="setting-sample"><span class="settings-fld" style="width:150px">Sample (Level): <span id="sample-val"></span></span></div>
             <div id="setting-sampleAscDes"><span class="settings-fld" style="width:150px">Sample (Asc/Des): <span id="sampleAscDes-val"></span></span></div>
+            <div id="setting-mrkrIntv"><span class="settings-fld" style="width:150px">Marker Intervals: <span id="mrkrIntv-val"></span></span></div>
+
         </div>
 
         <div id="selectcolors-h" class="heading"><span id="selectcolors-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Colors</div>
@@ -49,9 +51,11 @@
 <script>
     let version= "0.5.0";
 
+    console.log(map.fitBounds);
     //console.log(W);
     bcast.on("pluginOpened",console.log);
-    setTimeout(()=>console.log(store),4000);
+    console.log(W);
+
 
 	import map from '@windy/map';
 	import store from '@windy/store';
@@ -64,6 +68,7 @@
     import pluginDataLoader from '@windy/pluginDataLoader'
     import metrics from '@windy/metrics';
     import favs from '@windy/favs';
+    import rp from './rplannerWrapper.mjs';
 
     const load = pluginDataLoader({
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
@@ -71,6 +76,7 @@
 	});
 
 
+    let trajplugin=this;
     let traj=[];
     let currentlvl;
     let ascent=localStorage.getItem("ascent");
@@ -93,6 +99,8 @@
 
     let reftime;
     let h1=60*60*1000;  let h3=3*h1;  let min1=60*1000;  let d1=24*60*60*1000;   let d6=6*24*60*60*1000;
+    let mrkrIntv=localStorage.getItem("mrkrIntv");
+    mrkrIntv=h1;
 
     //let ts;            //timestamp   no longer used
     let tn=Date.now(); //time now
@@ -111,11 +119,26 @@
     let fvsDivs=[];
     let lvlsetbyplugin=false;
 
+    let rplannerOptions={
+        myPlugin:this.ident,
+        helpText:"This is help text.",
+        openPluginText:"Open Traj",
+        left:401,
+        interactive:false,
+        pathsDisplay:"none",
+        distanceDisplay:"none",
+        dotOpacity:0.3
+    };
+
+    let fitBoundsFx=map.fitBounds;
+
+
     let pickerOpen=false;
     bcast.fire('rqstClose','picker');
     picker.on("pickerClosed",()=>{console.log("Picker closed");pickerOpen=false});
     picker.on("pickerOpened",()=>{console.log("Picker open");pickerOpen=true});
     bcast.on("pluginOpened",e=>{if (e=="picker") pickerOpen=true});
+
 
 
     function menuToggle(c){
@@ -243,17 +266,17 @@
 
             <div id="open-left-pane" class="start-buttons">
                 Menu
-            </div>
-            <div id="save-gpx" class="start-buttons">
+            </div
+            ><div id="save-gpx" class="start-buttons">
                 Save
-            </div>
-            <div id="clear-trajs" class="start-buttons">
+            </div
+            ><div id="clear-trajs" class="start-buttons">
                 Clear
-            </div>
-            <div id="backw" class="start-buttons" >
+            </div
+            ><div id="backw" class="start-buttons" >
                 ${backw?"Forw":"Back"}
-            </div>
-            <div id="start-IP" class="start-buttons">
+            </div
+            ><div id="start-IP" class="start-buttons">
                 Start
             </div>
 
@@ -307,6 +330,15 @@
             this.setThumb(e.target.value);
             this.calcRangeVal(e.target.value);
         });
+        this.addLabels=function(ar){
+            for (let i=0, l=ar.length;i<l;i++){
+                let e=document.createElement("div");
+                e.classList.add("rangeLabels");
+                Object.assign(e.style,{"left":(-6+i*12/l)+"px" , "width":"calc("+(100/l)+"%)"});
+                e.innerHTML=ar[i];
+                this.wrap.appendChild(e);
+            }
+        }
     }
 
     let maxDurRange=new RangeEl("calc(100% - 130px)",240,0,2, $("#maxdur-val"),
@@ -332,7 +364,7 @@
     setDurRange.appendTo($("#setting-setdur"));
 
     let ascRange=new RangeEl("calc(100% - 130px)",8,0,0.1, $("#asc-val"),
-        v=>v, v=>v, rv=>rv?(rv+ "m/s"):"None",
+        v=>v, v=>v, rv=>Number(rv)?(rv+ "m/s"):"None",
         v=>{
             ascent=v;
             localStorage.setItem("ascent",ascent);
@@ -341,7 +373,7 @@
     ascRange.appendTo($("#setting-ascent"));
 
     let decRange=new RangeEl("calc(100% - 130px)",8,0,0.1, $("#des-val"),
-        v=>v, v=>v, rv=>rv?(rv+ "m/s"):"None",
+        v=>v, v=>v, rv=>Number(rv)?(rv+ "m/s"):"None",
         v=>{
             descent=v;
             localStorage.setItem("descent",descent);
@@ -349,7 +381,7 @@
     );
     decRange.appendTo($("#setting-descent"));
 
-    let sampleOpts=[5,10,15,20,30,60,120];
+    let sampleOpts=[5,10,15,20,30,60,180];
     let sampleRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#sample-val"),
         v=>sampleOpts[v], v=>sampleOpts.indexOf(v), rv=>(rv+ "min"),
         v=>{
@@ -359,6 +391,7 @@
         }
     );
     sampleRange.appendTo($("#setting-sample"));
+    sampleRange.addLabels(sampleOpts);
 
     let sampleOptsAD=[0.5,1,2,3,5,10,15];
     let sampleAscDesRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#sampleAscDes-val"),
@@ -369,6 +402,40 @@
         }
     );
     sampleAscDesRange.appendTo($("#setting-sampleAscDes"));
+    sampleAscDesRange.addLabels(sampleOptsAD);
+
+    let mrkrIntervals=[5,10,15,20,30,60,180];
+    let mrkrIntvRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#mrkrIntv-val"),
+        v=>mrkrIntervals[v], v=>mrkrIntervals.indexOf(v), rv=>(rv+ "min"),
+        v=>{
+            mrkrIntv=v*60000;
+            if (ghostmrkr.k!==false){
+                console.log(v%traj[ghostmrkr.k].sample);
+            }
+            localStorage.setItem("mrkrIntv",mrkrIntv);
+            recalcTimeMrkrs(mrkrIntv, false);
+        }
+    );
+    mrkrIntvRange.appendTo($("#setting-mrkrIntv"));
+    mrkrIntvRange.addLabels(mrkrIntervals);
+    mrkrIntvRange.input.addEventListener("change",()=>{
+        if (ghostmrkr.k!==false){
+            let k=ghostmrkr.k;
+            let s=traj[k].sample;
+            for (var i=Number(mrkrIntvRange.input.value);  mrkrIntervals[i]%traj[k].sample && i<mrkrIntervals.length; i++);
+            console.log(k,i,mrkrIntervals[i]);
+            mrkrIntvRange.calcInputVal(mrkrIntervals[i]);
+            if (traj[k].mrkrIntv!=mrkrIntervals[i]){
+                traj[k].mrkrIntv=mrkrIntervals[i];
+                if (rp.isOpen ){
+                    map.fitBounds=()=>{};
+                    setTimeout(()=>map.fitBounds=fitBoundsFx, 1000);
+                    openRPlanner();
+                }
+            }
+        }
+
+    });
 
 
     function placeThumbs(){
@@ -378,6 +445,7 @@
         decRange.calcInputVal(descent);
         sampleRange.calcInputVal(sample);
         sampleAscDesRange.calcInputVal(sampleAscDes);
+        mrkrIntvRange.calcInputVal(Math.round(mrkrIntv/60000));
     }
 
     /*function setDes(v){
@@ -449,8 +517,45 @@
             $("#fav-div").style.display="none";
             $("#display-fav-div").style.opacity=0.4;
         }
-    })
+    });
 
+    let openRplanBut=document.createElement("div");
+    openRplanBut.classList.add("start-buttons");
+    openRplanBut.style.width="auto";
+    Object.assign(openRplanBut.style,{"position":"relative","z-index":2000,"left":"5px","top":"-25px","border-radius":"3px","background-color":"rgba(0,0,0,0.7)", "padding":"0px 3px 0px 3px"});
+    openRplanBut.innerHTML="Route Planner";
+    openRplanBut.addEventListener("click",e=>{
+        e.stopPropagation();
+        openRPlanner();
+    });
+
+
+
+    function openRPlanner(){//open rplanner for selected traj (ghostmrkr.k)
+        if (typeof ghostmrkr.k !=="undefined"){
+            let k=ghostmrkr.k;
+            let rt=[];
+            let i,il,j,jl;
+            for (i=0,il=traj[k].seg.length;i<il;i++){
+                let sg=traj[k].seg[i];
+                for (j=0,jl=sg.pnts.length;j<jl;j++){
+                    let p=sg.pnts[j];
+                    if (p.mrkr || (i==0 && j==0) || (i==il-1 && j==jl-1)) rt.push({coords:{lat:p.lat,lng:p.lng},altit:p.altm});
+                }
+            }
+            console.log(rt);
+            let res=rp.loadRP(
+                rt,rplannerOptions,
+                placeInfomrkr
+            )
+
+            if (res !== true)
+                showMsg(res);
+        }
+    }
+
+    this.onopen=()=> {rp.setLeft(401)};
+    this.onclose=()=>{rp.setLeft(0)};
 
     if (rs.isMobile)$("#desktop-title").style.display="none";
     if (rs.isTablet){$("#logo").style.left="100%"; $("#logo").style.marginLeft="-150px";}
@@ -605,6 +710,15 @@
         let h=(startmodel=="ecmwf" && t-reftime>d6+h3/2)?h3*2:h3;
         return Math.floor(((t-reftime)+h/2)/h)*h;
     }
+    function recalcTimeMrkrs(intv,all=false){ //intv in ms,    apply to all = true   or selected = false
+        traj.forEach(tr=>{
+            console.log(ghostmrkr.k,tr.k);
+            if (all || ghostmrkr.k==tr.k) tr.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
+                if (pnt.mrkr)pnt.mrkr.remove();
+                pnt.mrkr=(pnt.t%intv==0? (L.circleMarker(pnt,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false}).addTo(map)) : false);
+            }))
+        });
+    }
 
     ////highlight time segment   (3 or 6 hours if ecmwf>6 days after reftime)
     store.on("timestamp",e=>{
@@ -632,23 +746,22 @@
         }));
     });
 
-
-
-
+    map.on("click",()=>{
+        console.log("MAP CLICKED")
+        $("#mrkr").style.display="none";
+        $("#active-mrkr").style.display="none";
+        selectedPnt=false;
+    });
 
     function drawTraj(cstart,startt=false,lvli=-1,mdli=-1){
-
         let c=cstart;
         pntAltm=-9999;
-
         if (!startt){
             startt= Math.round((store.get("timestamp"))/(60*min1))*60*min1;
             startlvl=store.get("level");
             startmodel=store.get("product");
         }
-
         $('#progress-thumb').style.opacity=1;
-
         let nextLvl=(lvli)=>{
             for (lvli++ ;lvli<selLvls.length&&!selLvls[lvli].sel ;lvli++);
             return lvli<selLvls.length?lvli:-1;
@@ -665,15 +778,12 @@
             mdli=nextMdl(mdli);
             if (mdli<0) return;
         }
-
         let lvl=selLvls[lvli].lvl;
         let col=selLvls[lvli].col;
 
         store.set("level",lvl=="1000h"?(startmodel=="iconEu"?"surface":"100m"):lvl);
         store.set("product",selModels[mdli].m);
-        console.log("set to model", selModels[mdli].m);
-
-        traj.forEach(e=>e.seg.forEach(l=>l.line.setStyle({opacity:0.4})));
+        traj.forEach(e=>e.seg.forEach(l=>l.line.setStyle({opacity:0.4})))
 
         let k=traj.push({
             starttimeStr:new Date(startt).toISOString().slice(0,-5)+"Z",
@@ -686,8 +796,12 @@
             model:selModels[mdli].m,
             ascent: ascent,
             descent: descent,
+            sample: sample,
+            sampleAscDes: sampleAscDes,
             calcBackward: backw,
-            seg:[]
+            seg:[],
+            k:traj.length,  //k= index
+            mrkrIntv:mrkrIntv
         })-1;
 
         let previ=-99;
@@ -700,14 +814,9 @@
             console.log(selModels[mdli].m);
             let fetchPoint=c=>{
                 c.model=selModels[mdli].m;
-                //load("forecast",c).then(data=>{
-                    //console.log("forecast", data.data.header.refTime);
-                //})
                 load('airData',c).then(data=>{
-
                     console.log(data);
                     reftime=new Date(data.data.header.refTime).getTime();
-                    //console.log("air",data.data.header.refTime);
 
                     let i=time2index(t);    //i refers to index in data array,  3 hourly intervals
                                             //the reftime may change and consequently index value may change.
@@ -721,14 +830,13 @@
                         };
                         let ll=traj[k].seg[j];
                         ll.ghostline.on("click",ev=>{
-                            ghostmrkr.k=k;
-                            let nearestPnt=placeInfomrkr(ev.latlng);
+                            ghostmrkr.k=k; //ghostmrkr.k is the currently selected route
+                            let nearestPnt=placeInfomrkr(ev.latlng,true);
                             store.set("timestamp",nearestPnt.t);
                             store.set("product",ll.model);
 
                             ghostmrkr.setLatLng(nearestPnt);
 
-                            //selpth=ll.pth;
                             lvlsetbyplugin=true;
                             store.set("level",ll.lvl=="1000h"?(ll.model=="iconEu"?"surface":"100m"):ll.lvl);
                             selLvls.forEach(e=>{
@@ -786,10 +894,11 @@
                             alt:pntAlt,
                             altm:pntAltm,
                             //lvl:w.nearestlvl,
-                            sample:smpl
+                            sample:smpl,
+                             dist:traj[k].dist
                     });
                     ////hour markers
-                    if (t%h1==0){
+                    if (t%mrkrIntv==0){
                             let tm=t;
                             traj[k].seg[j].pnts[traj[k].seg[j].pnts.length-1].mrkr=
                                  L.circleMarker(c,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false})
@@ -863,9 +972,7 @@
                         let dirfrom=(w.dirto+180)%360;
                         let d=smpl*60*w.wind;
 
-                        traj[k].dist+=d;
-                        traj[k].ete+=smpl*min1;
-                        if(!traj[k].update) traj[k].update=data.data.header.update;
+
 
                          /////////calculate next point,  thx to Chris Veness (github)
                         var ad=d/6371000;//angular distance
@@ -887,6 +994,10 @@
                             dir:Math.round(dirfrom),
                             nearestlvl:w.nearestlvl
                         });
+
+                        traj[k].dist+=d;
+                        traj[k].ete+=smpl*min1;
+                        if(!traj[k].update) traj[k].update=data.data.header.update;
 
                         t+=smpl*min1 * (backw?-1:1);              ////allow backward traj
                         if (t>reftime+d1*10 || (t>reftime+d1*5 && selModels[mdli].m=="iconEu") || t<reftime+(h3/2)) {
@@ -933,7 +1044,7 @@
 
 ///////Info marker
     let infoicon=L.divIcon({html:
-        `<div id="mrkr" style="display:none; height:100px; width:120px; height:25px; border:0px solid white; outline-style:none; position:absolute;   font-family:arial; color:white;  text-shadow: 1px 1px 1px rgba(0,0,0,0.4); background-color:transparent; white-space:nowrap;">
+        `<div id="mrkr" style="display:none; width:120px; outline-style:none;position:absolute;  font-family:arial; color:white;  text-shadow: 1px 1px 1px rgba(0,0,0,0.4); background-color:transparent; white-space:nowrap;">
             <div id="close-info-mrkr"  class="closing-x" style="display:block; margin:3px; font-size:15px; top:0px; right:0px;"></div>`+
             `<div style="display:block; position:absolute; left:-15px; top:0px; width:30px; height:140px;">
                 <div style="position:absolute;left:15px;top:3px;border-left:2px solid rgba(0,0,0,0.8); height:115px;"></div>
@@ -941,7 +1052,7 @@
             </div>`+
             //`<div id="posname" class="picker-transparent"  style="position:absolute; top:-20px; left:0px; transform:translateX(-50%); font-weight:bold; "></div>`+
             `<div id="mrkrLeft" style="pointer-events: none; position:absolute; font-size:11px; line-height:110%;  top:0px;  position:absolute; padding:3px;  border-radius:5px 0px 0px 5px;  right:120px; opacity:1; background-color:rgba(0,0,0,0.7);">  </div>`+
-            `<div id="mrkrRight" style="pointer-events: none; line-height:110%; width:100%; font-size:11px; position:absolute; padding:3px;  border-radius:0px 5px 5px 0px;  left:0px; opacity:1; background-color:rgba(0,0,0,0.8);"></div>
+            `<div id="mrkrRight" style="padding:3px; padding-bottom:25px; pointer-events: none; line-height:110%; width:100%; font-size:11px; position:relative;  border-radius:0px 5px 5px 0px;  left:0px; opacity:1; background-color:rgba(0,0,0,0.7);"></div>
         </div>`
     ,iconAnchor:[0,125]});
     let infomrkr = L.marker([0,0],{icon:infoicon, interactive:true, bubblingMouseEvents:false, opacity:1,  zIndexOffset:4700});
@@ -972,15 +1083,25 @@
         icon:gmicon, opacity:0, interactive:true, draggable:true, zIndexOffset:5000,  bubblingMouseEvents:false
     }).addTo(map);
 
-    function placeInfomrkr(c){
-        if (typeof ghostmrkr.k!=="undefined"){
+    function placeInfomrkr(c, send2rplan){
+        if (typeof ghostmrkr.k !=="undefined"){
             let k=ghostmrkr.k;
             let pnt;
-            let evlt=c.lat, evln=c.lng; let mind=Infinity;
-            traj[k].seg.forEach(sg=>sg.pnts.forEach(p=>{
-                let d=(p.lat-evlt)*(p.lat-evlt)+(p.lng-evln)*(p.lng-evln);
-                if (d<mind){mind=d; pnt=p}
-            }));
+
+            if (!isNaN(c)){
+                let dist=traj[k].dist*c
+                let mind=Infinity;
+                traj[k].seg.forEach(sg=>sg.pnts.forEach(p=>{
+                    let d=Math.abs(p.dist-dist);
+                    if (d<mind){mind=d; pnt=p}
+                }));
+            } else {
+                let evlt=c.lat, evln=c.lng; let mind=Infinity;
+                traj[k].seg.forEach(sg=>sg.pnts.forEach(p=>{
+                    let d=(p.lat-evlt)*(p.lat-evlt)+(p.lng-evln)*(p.lng-evln);
+                    if (d<mind){mind=d; pnt=p}
+                }));
+            }
             activemrkr.setLatLng(pnt);
             $("#active-mrkr").style.display="block";
             infomrkr.setLatLng(pnt);
@@ -995,17 +1116,23 @@
                 "Time: "+pnt.tStr.slice(11)+"<br>"+
                 "Alt: "+pnt.altm+"m"+"<br>"+
                 (pnt.nearestlvl?("Lvl: "+pnt.nearestlvl +"<br>"):"")+
-                "Elev: "+pnt.elev+"m";
+                "Elev:"+pnt.elev+"m";
+            $("#mrkr").appendChild(openRplanBut);
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
             store.set("level",pnt.lvl=="1000h"?(startmodel=="iconEu"?"surface":"100m"):pnt.lvl);
             selectedPnt={lat:pnt.lat,lon:pnt.lng};       //must be {lat:,lon:}
+
+            if (rp.isOpen  && send2rplan){
+                rp.moveSliderLine(pnt.dist/traj[k].dist)
+            }
+
             return pnt;
         }
     }
 
     ghostmrkr.on("drag",ev=>{
-        placeInfomrkr(ev.latlng);
+        placeInfomrkr(ev.latlng, true);
     });
 
     ghostmrkr.on("dragstart",e=>{
@@ -1056,7 +1183,7 @@ function saveGPX(){
             <update_time>${e.update}</update_time>
             <distance>${Math.round(e.dist)}</distance>
             <time_mins>${Math.round(e.ete/min1)}</time_mins>
-            <av_speed_kph>${Math.round((e.dist/10)/(e.ete/h1))/100}</av_speed_kph>
+            <av_speed_kmph>${Math.round((e.dist/10)/(e.ete/h1))/100}</av_speed_kmph>
             <level>${e.lvl}</level>
             <alt_ft>${e.alt}</alt_ft>
             <alt_m>${e.altm}</alt_m>

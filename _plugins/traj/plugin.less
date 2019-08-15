@@ -1,5 +1,5 @@
 @import 'dev/variables.less';
-//@import 'src/pickerDivs.less';
+@import 'src/rplannerWrapper.less';
 
 @widthOfMyPlugin: 400px;
 
@@ -48,9 +48,11 @@
 }
 
 .start-buttons{
-    margin:3px 0px 1px 0px;
-    padding:3px 2px 3px 3px;
-    width: 18%;
+    margin:3px 0.5px 1px 0.5px;
+    padding:3px 0px 3px 0px;
+    text-align:center;
+    font-size:11px;
+    width: 19.5%;
     border:1px solid rgba(255,255,255,0.5);
     border-radius: 7px;
     display:inline-block;
@@ -78,6 +80,7 @@
     border:1px solid rgba(255,255,255,0.5);
     background-color:rgba(0,0,0,0.2);
     margin:1px 0px 1px 0px;
+    overflow:hidden;
 }
 .rangeInput{
     left:3px;
@@ -88,6 +91,14 @@
     z-index:999;
     opacity:0;
 }
+.rangeLabels{
+    position:relative;
+    display:inline-block;
+    text-align:center;
+    font-size:9px;
+    opacity:0.3
+}
+
 .settings-fld{
     position:relative;
     display:inline-block;
