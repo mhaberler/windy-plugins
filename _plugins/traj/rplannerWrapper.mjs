@@ -100,7 +100,7 @@ import rs from '@windy/rootScope';
 
         recalc:()=>{   //Obtain canvas width,  margin,  then offset in pixels for each waypoint and store as wpx, then make altitude path.
             if(rp.canvasw!=rplan.refs.canvas.offsetWidth){
-                console.dir(rplan.refs.canvas);
+                //console.dir(rplan.refs.canvas);
                 rp.canvasw=rplan.refs.canvas.offsetWidth;
                 let col=rplan.refs.svg.children;  //col=htmlcollection
                 for (let i=0; i<col.length;i++){
@@ -122,7 +122,7 @@ import rs from '@windy/rootScope';
                 }
                 if (rp.altPath){
                     let pth=rp.makeAltPath();
-                    console.log(pth);
+                    //console.log(pth);
                     rp.altPath.setAttributeNS(null, 'd', rp.makeAltPath());
                 }
             }

@@ -51,13 +51,7 @@
 <script>
     let version= "0.5.0";
 
-    console.log(map.fitBounds);
-    //console.log(W);
-    bcast.on("pluginOpened",console.log);
-    console.log(W);
-
-
-	import map from '@windy/map';
+   	import map from '@windy/map';
 	import store from '@windy/store';
 	import bcast from '@windy/broadcast';
     import picker from '@windy/picker';
@@ -89,7 +83,7 @@
     if (!maxdur) maxdur=720;
     let menuOpen=JSON.parse(localStorage.getItem("menuOpen"));
     if (!menuOpen)
-        menuOpen={selectlevels:false, about:false,settings:false,selectcolors:false};
+        menuOpen={selectlevels:false, selectmodels: false, about:false, settings:false,selectcolors:false};
     let sample=Number(localStorage.getItem("sample"));
     if (!sample)sample=15;
     var sampleAscDes=Number(localStorage.getItem("sampleAscDes"));
@@ -304,12 +298,12 @@
         this.outdiv=outdiv;
 
         this.appendTo= function(e){
-            console.log(this);
+            //console.log(this);
             e.appendChild(this.wrap)
         };
         this.setThumb=function(v){
             let offsetw=this.wrap.offsetWidth;
-            console.log("VALUE",v,"OFFSETW",offsetw);
+            //console.log("VALUE",v,"OFFSETW",offsetw);
             this.thumb.style.left=((offsetw-20)*v/this.input.max)+"px";
         }
         this.calcRangeVal=function(iv){
@@ -410,7 +404,7 @@
         v=>{
             mrkrIntv=v*60000;
             if (ghostmrkr.k!==false){
-                console.log(v%traj[ghostmrkr.k].sample);
+                //console.log(v%traj[ghostmrkr.k].sample);
             }
             localStorage.setItem("mrkrIntv",mrkrIntv);
             recalcTimeMrkrs(mrkrIntv, false);
@@ -423,7 +417,7 @@
             let k=ghostmrkr.k;
             let s=traj[k].sample;
             for (var i=Number(mrkrIntvRange.input.value);  mrkrIntervals[i]%traj[k].sample && i<mrkrIntervals.length; i++);
-            console.log(k,i,mrkrIntervals[i]);
+            //console.log(k,i,mrkrIntervals[i]);
             mrkrIntvRange.calcInputVal(mrkrIntervals[i]);
             if (traj[k].mrkrIntv!=mrkrIntervals[i]){
                 traj[k].mrkrIntv=mrkrIntervals[i];
@@ -543,7 +537,7 @@
                     if (p.mrkr || (i==0 && j==0) || (i==il-1 && j==jl-1)) rt.push({coords:{lat:p.lat,lng:p.lng},altit:p.altm});
                 }
             }
-            console.log(rt);
+            //console.log(rt);
             let res=rp.loadRP(
                 rt,rplannerOptions,
                 placeInfomrkr
@@ -712,7 +706,7 @@
     }
     function recalcTimeMrkrs(intv,all=false){ //intv in ms,    apply to all = true   or selected = false
         traj.forEach(tr=>{
-            console.log(ghostmrkr.k,tr.k);
+            //console.log(ghostmrkr.k,tr.k);
             if (all || ghostmrkr.k==tr.k) tr.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
                 if (pnt.mrkr)pnt.mrkr.remove();
                 pnt.mrkr=(pnt.t%intv==0? (L.circleMarker(pnt,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false}).addTo(map)) : false);
@@ -747,7 +741,7 @@
     });
 
     map.on("click",()=>{
-        console.log("MAP CLICKED")
+        //console.log("MAP CLICKED")
         $("#mrkr").style.display="none";
         $("#active-mrkr").style.display="none";
         selectedPnt=false;
@@ -811,11 +805,11 @@
         let fetchData=(c,t,lvl)=>{
             store.set("timestamp",t);
 
-            console.log(selModels[mdli].m);
+            //console.log(selModels[mdli].m);
             let fetchPoint=c=>{
                 c.model=selModels[mdli].m;
                 load('airData',c).then(data=>{
-                    console.log(data);
+                    //console.log(data);
                     reftime=new Date(data.data.header.refTime).getTime();
 
                     let i=time2index(t);    //i refers to index in data array,  3 hourly intervals
