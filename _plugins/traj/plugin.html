@@ -819,7 +819,7 @@
                         j++;
                         traj[k].seg[j]={
                             line:L.polyline([c], {color: col, weight:2, opacity:1, interactive:false, smoothFactor:0.5}).addTo(map),
-                            ghostline:L.polyline([c], {color: "white", opacity:0, weight:13, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
+                            ghostline:L.polyline([c], {color: "white", opacity:0, weight:15, smoothFactor:0.1, interactive:true, bubblingMouseEvents:false}).addTo(map),
                             lvl:lvl, model:selModels[mdli].m, alt:selLvls[lvli].alt, t:t, midtime:time2midtime(t),  j:j, k:k,  pnts:[]
                         };
                         let ll=traj[k].seg[j];
@@ -842,6 +842,11 @@
                                     else l.line.setStyle({weight:2, opacity:0.9});
                                 }else l.line.setStyle({weight:2,opacity:0.4});
                             }));
+
+                            if (rp.isOpen){
+                                openRPlanner();
+                                console.log("rp is open");
+                            }
                         });
                         previ=i;
                     }
