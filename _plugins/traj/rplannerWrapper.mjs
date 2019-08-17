@@ -6,13 +6,15 @@ import bcast from  '@windy/broadcast';
 import picker from  '@windy/picker';
 import rs from '@windy/rootScope';
 
+
     let rplan=W.plugins.rplanner;
-    let mapclick=map._events.click[0].fn;
+
+
     let calendarDiv=$("#calendar")?$("#calendar").innerHTML:"";
 
     let scrollpos=0;
     let xpos=0;
-
+    let mapclickAr;
     let allowMoveInfo=true;
     let mustHideDot=true;
     let overCanvas=false;
@@ -44,7 +46,8 @@ import rs from '@windy/rootScope';
         loadRP:(
             fp,  //[ { coords: {lat: lat, lng: lng},  altit: altitude in meter }, ... ]
             options,
-            sendPosition     //sendPosition is callback function to which position as ratio 0-1 along route is sent.
+            sendPosition,     //sendPosition is callback function to which position as ratio 0-1 along route is sent.
+            onCloseCbf
         )=>{
             if (rs.isMobile){
                 console.log("Not working in mobile");
@@ -53,6 +56,7 @@ import rs from '@windy/rootScope';
                 console.log("Not enough waypoints");
                 return "Not enough waypoints";
             }else  {
+
                 rp.fp=fp;
                 for(let p in options)
                     if (rp.hasOwnProperty(p))rp[p]=options[p];
@@ -60,6 +64,7 @@ import rs from '@windy/rootScope';
                     //let i=opts.indexOf(p);
 
                 rp.sendPosition=sendPosition;
+                rp.onCloseCbf=onCloseCbf;
                 rp.elevs=false;
                 rp.wpx=[];
                 rp.myPlugin=W.plugins[rp.myPlugin];
@@ -75,8 +80,7 @@ import rs from '@windy/rootScope';
                 if (rplan.isOpen) setTimeout(()=>{
                     rp.recalc();
                     setOptions();
-
-                },500);     //if not open,  recalc will be called from pluginOpened listener.
+                },500);     //if not open,  recalc and setOptions will be called from pluginOpened listener.
                 return true;
             }
         },
@@ -183,22 +187,27 @@ import rs from '@windy/rootScope';
         },
 
         setInteractive:interact=>{
+            console.log("setInteract");
             setTimeout(()=>{
                 rp.getDistanceIcons();
                 if (interact){
                     rp.distanceIcons.forEach(e=>{
                         e.style.pointerEvents="auto";
                         e.style.opacity=1;
-                        rp.interactive=true;
-                        map.on("click",mapclick);
+
+                        //map.on("click",mapclick);
                     });
+                    restoreMapClicks();
+                    rp.interactive=true;
                 } else {
                     rp.distanceIcons.forEach(e=>{
                         e.style.pointerEvents="none";
                         e.style.opacity=0.7;
-                        rp.interactive=false;
-                        map.off("click");
+
+                        //map.off("click");
                     });
+                    stopMapClicks();
+                    rp.interactive=false;
                 }
             },200);
         },
@@ -214,6 +223,7 @@ import rs from '@windy/rootScope';
 
         setDistanceDisplay:(val="initial")=>{
             if(val===true)val="initial"; else if (val===false)val="none";
+            toggleDist.innerHTML=val=="initial"?"Hide Dist":"Show Dist";
             rp.distanceDisplay=val;
             setTimeout(()=>{
                 rp.getPaths();
@@ -242,15 +252,41 @@ import rs from '@windy/rootScope';
                     mustHideDot=false;
                 }
             }
+        },
+
+        close:e=>{
+            if ((typeof e)!=="undefined" || !e) rplan.close(); //if not from clicking closing-x
+            //map.on("click",mapclick);
+            restoreMapClicks();
+            rp.isOpen=false;
+            allowMoveInfo=true;
+            mustHideDot=true;
+            overCanvas=false;
+            scrollpos=0;
+            if(typeof rp.onCloseCbf ==="function")
+            rp.onCloseCbf();
         }
     }
 
    // bcast.on("mapChanged",e=>{console.log(e); });
 
+
     function setOptions(){
+        console.log("set options");
         rp.setInteractive(rp.interactive);
         rp.setPathsDisplay(rp.pathsDisplay);
         rp.setDistanceDisplay(rp.distanceDisplay);
+    }
+
+    function stopMapClicks(){ //stop anon functions (which is the windy mapclick fxs),  reattach named functions
+        map.off("click");
+        mapclickAr.forEach(fn=>{
+            if (fn.name){map.on("click",fn)}
+        })
+    }
+    function restoreMapClicks(){ //restore all click functions stored in mapclickAr
+        map.off("click");
+        mapclickAr.forEach(fn=>map.on("click",fn));
     }
 
     bcast.on("pluginOpened",e=>{if (e=="rplanner") {
@@ -259,11 +295,15 @@ import rs from '@windy/rootScope';
         console.log("RPLANNER Opened");
         bcast.fire("rqstClose",picker);
 
+        //grab mapclick fxs
+        mapclickAr=map._events.click.map(e=>e.fn);
+
         rp.isOpen=rplan.isOpen;
         let myPlugin=W.plugins[rp.myPluginName];
         rp.canvasw=0;
         if(!rplan.refs.calendar.innerHTML) rplan.refs.calendar.innerHTML=calendarDiv;  //calender div in the rplanner not filled when resizing,  pick up when main plugin loaded.
-        setOptions();
+
+        setTimeout(setOptions,500);//wait for elements to appear
 
         rplan.refs.canvas.addEventListener("mouseenter", e=> {
             xpos=e.offsetX;
@@ -317,10 +357,8 @@ import rs from '@windy/rootScope';
         toggleDist.addEventListener("click",(e)=>{
             let tx=e.target.innerHTML;
             if (tx=="Hide Dist"){
-                e.target.innerHTML="Show Dist";
                 rp.setDistanceDisplay(false);
             } else {
-                e.target.innerHTML="Hide Dist";
                 rp.setDistanceDisplay(true);
             }
         });
@@ -347,14 +385,7 @@ import rs from '@windy/rootScope';
                 e.classList.add("my-rplanner-closing-x");
                 e.style.fontSize="22px";
                 e.style.top="-47px";
-                e.addEventListener("click",()=>{
-                    map.on("click",mapclick);
-                    rp.isOpen=false;
-                    allowMoveInfo=true;
-                    mustHideDot=true;
-                    overCanvas=false;
-                    scrollpos=0;
-                });
+                e.addEventListener("click",rp.close);
             }
         }
 

@@ -4,10 +4,10 @@
         <div id="desktop-title" class="title">Trajectory Plugin</div><br>
 
         <div id="selectlevels-h"  class="heading"><span id="selectlevels-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Levels</div>
-        <div id="selectlevels" style="margin-bottom:10px; display:none"></div>
+        <div id="selectlevels" style="margin-bottom:10px; display:none; margin-left:25px;"></div>
 
         <div id="selectmodels-h"  class="heading"><span id="selectmodels-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Models</div>
-        <div id="selectmodels" style="margin-bottom:10px; display:none"></div>
+        <div id="selectmodels" style="margin-bottom:10px; display:none; margin-left:25px;"></div>
 
         <div id="settings-h"  class="heading"><span id="settings-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Settings</div>
         <div id="settings" style="margin-bottom:10px; display:none">
@@ -18,7 +18,11 @@
             <div id="setting-sample"><span class="settings-fld" style="width:150px">Sample (Level): <span id="sample-val"></span></span></div>
             <div id="setting-sampleAscDes"><span class="settings-fld" style="width:150px">Sample (Asc/Des): <span id="sampleAscDes-val"></span></span></div>
             <div id="setting-mrkrIntv"><span class="settings-fld" style="width:150px">Marker Intervals: <span id="mrkrIntv-val"></span></span></div>
+        </div>
 
+        <div id="airspaces-h" class="heading"><span id="airspaces-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Airspaces</div>
+        <div id="airspaces" style="margin-bottom:10px; position:relative; display:none; margin-left:25px;">
+            <div id="aipdiv"></div>
         </div>
 
         <div id="selectcolors-h" class="heading"><span id="selectcolors-ar" style="pointer-events:none"></span>&nbsp;&nbsp;&nbsp;Select Colors</div>
@@ -63,6 +67,8 @@
     import metrics from '@windy/metrics';
     import favs from '@windy/favs';
     import rp from './rplannerWrapper.mjs';
+    import asp from './airspaces.mjs';
+    import pickerT from './pickerTools.mjs';
 
     const load = pluginDataLoader({
 		key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
@@ -83,7 +89,7 @@
     if (!maxdur) maxdur=720;
     let menuOpen=JSON.parse(localStorage.getItem("menuOpen"));
     if (!menuOpen)
-        menuOpen={selectlevels:false, selectmodels: false, about:false, settings:false,selectcolors:false};
+        menuOpen={selectlevels:false, selectmodels: false, about:false, airspaces:false, settings:false,selectcolors:false};
     let sample=Number(localStorage.getItem("sample"));
     if (!sample)sample=15;
     var sampleAscDes=Number(localStorage.getItem("sampleAscDes"));
@@ -132,8 +138,6 @@
     picker.on("pickerClosed",()=>{console.log("Picker closed");pickerOpen=false});
     picker.on("pickerOpened",()=>{console.log("Picker open");pickerOpen=true});
     bcast.on("pluginOpened",e=>{if (e=="picker") pickerOpen=true});
-
-
 
     function menuToggle(c){
         $("#"+c).style.display=menuOpen[c]?"block":"none";
@@ -403,9 +407,6 @@
         v=>mrkrIntervals[v], v=>mrkrIntervals.indexOf(v), rv=>(rv+ "min"),
         v=>{
             mrkrIntv=v*60000;
-            if (ghostmrkr.k!==false){
-                //console.log(v%traj[ghostmrkr.k].sample);
-            }
             localStorage.setItem("mrkrIntv",mrkrIntv);
             recalcTimeMrkrs(mrkrIntv, false);
         }
@@ -413,14 +414,14 @@
     mrkrIntvRange.appendTo($("#setting-mrkrIntv"));
     mrkrIntvRange.addLabels(mrkrIntervals);
     mrkrIntvRange.input.addEventListener("change",()=>{
-        if (ghostmrkr.k!==false){
+        if (ghostmrkr.k>=0){
             let k=ghostmrkr.k;
             let s=traj[k].sample;
             for (var i=Number(mrkrIntvRange.input.value);  mrkrIntervals[i]%traj[k].sample && i<mrkrIntervals.length; i++);
             //console.log(k,i,mrkrIntervals[i]);
-            mrkrIntvRange.calcInputVal(mrkrIntervals[i]);
-            if (traj[k].mrkrIntv!=mrkrIntervals[i]){
-                traj[k].mrkrIntv=mrkrIntervals[i];
+            mrkrIntvRange.calcInputVal(Math.round(mrkrIntv/60000));
+            if (traj[k].mrkrIntv!=mrkrIntervals[i]*60000){
+                traj[k].mrkrIntv=mrkrIntervals[i]*60000;
                 if (rp.isOpen ){
                     map.fitBounds=()=>{};
                     setTimeout(()=>map.fitBounds=fitBoundsFx, 1000);
@@ -520,7 +521,13 @@
     openRplanBut.innerHTML="Route Planner";
     openRplanBut.addEventListener("click",e=>{
         e.stopPropagation();
-        openRPlanner();
+        if (rp.isOpen){
+            rp.close();
+        }   else {
+            openRPlanner();
+            openRplanBut.innerHTML="Close Route Planner";
+        }
+
     });
 
 
@@ -540,7 +547,8 @@
             //console.log(rt);
             let res=rp.loadRP(
                 rt,rplannerOptions,
-                placeInfomrkr
+                placeInfomrkr,
+                ()=>{openRplanBut.innerHTML="Route Planner"}
             )
 
             if (res !== true)
@@ -557,7 +565,7 @@
     selModels.forEach((e,i)=>{
         e.div=document.createElement("div");
         e.div.innerHTML=e.m;
-        e.div.style.display="inline-block";  e.div.style.marginLeft="25px"; e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
+        e.div.style.display="inline-block";   e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
         if (e.sel){
             e.div.style.opacity=1;
             e.div.style.color="yellow";
@@ -592,7 +600,7 @@
     selLvls.forEach((e,i)=>{
         e.div=document.createElement("div");
         e.div.innerHTML=`<span class="lvlspan">${e.lvl}</span><span class="lvlspan">${(e.alt<10000?(e.alt+"ft"):(e.alt/100+"FL"))}</span><span class="lvlspan" style="width:auto">${e.altm}m</span>`;
-        e.div.style.display="inline-block";  e.div.style.marginLeft="25px"; e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
+        e.div.style.display="inline-block";  e.div.style.padding="1px"; e.div.style.borderRadius="3px"; e.div.style.cursor="pointer";
         if (e.sel){
             e.div.style.opacity=1; e.div.style.color=e.col;
         } else {
@@ -740,12 +748,17 @@
         }));
     });
 
-    map.on("click",()=>{
-        //console.log("MAP CLICKED")
-        $("#mrkr").style.display="none";
-        $("#active-mrkr").style.display="none";
-        selectedPnt=false;
-    });
+    function deSelectTraj(){
+        console.log(map._events.click );
+        console.log("MAP CLICKED");
+        if (!rp.isOpen){
+            $("#mrkr").style.display="none";
+            $("#active-mrkr").style.display="none";
+            selectedPnt=false;
+            ghostmrkr.k=-1;
+        }
+    }
+    map.on("click",deSelectTraj);
 
     function drawTraj(cstart,startt=false,lvli=-1,mdli=-1){
         let c=cstart;
@@ -845,8 +858,10 @@
 
                             if (rp.isOpen){
                                 openRPlanner();
-                                console.log("rp is open");
                             }
+
+                            console.log(traj[k].mrkrIntv);
+                            mrkrIntvRange.calcInputVal(Math.round(traj[k].mrkrIntv/60000));
                         });
                         previ=i;
                     }
@@ -1065,6 +1080,7 @@
         $("#active-mrkr").style.display="none";
         selectedPnt=false;
     });
+    $("#mrkr").appendChild(openRplanBut);
 
     let amicon=L.divIcon({
             html:"<div id='active-mrkr' style='position:absolute;width:12px;height:12px;border-radius:5px;border:1px solid white'></div>",
@@ -1116,7 +1132,7 @@
                 "Alt: "+pnt.altm+"m"+"<br>"+
                 (pnt.nearestlvl?("Lvl: "+pnt.nearestlvl +"<br>"):"")+
                 "Elev:"+pnt.elev+"m";
-            $("#mrkr").appendChild(openRplanBut);
+
             $("#mrkr").style.display="block";
             store.set("timestamp",pnt.t);
             store.set("level",pnt.lvl=="1000h"?(startmodel=="iconEu"?"surface":"100m"):pnt.lvl);
@@ -1143,6 +1159,32 @@
     });
     ghostmrkr.on("click",e=>{
     })
+
+////picker elements for airspace
+
+        let picker_asp=document.createElement("div");
+        picker_asp.id="picker_asp";
+        picker_asp.style.textHeight="100%"; picker_asp.style.fontSize="10px";
+
+        pickerT.fillRightDiv(picker_asp);     pickerT.hideRightDiv();     //in case open before plugin mounted.
+
+        pickerT.drag(e=>{
+                pickerT.fillRightDiv(asp.findAsp(e));
+        },350);
+
+        picker.on('pickerOpened', e=>{
+                picker_asp.innerHTML=asp.findAsp(e);
+                pickerT.fillRightDiv(picker_asp);
+        });
+
+        picker.on('pickerMoved', e=>{
+                pickerT.fillRightDiv(asp.findAsp(e));
+        });
+
+        picker.on('pickerClosed',e=>{
+                asp.clearAsp();
+        });
+
 
 /////  function save .gpx
 function saveGPX(){
