@@ -42,6 +42,7 @@ import rs from '@windy/rootScope';
         pathsDisplay:"none",
         distanceDisplay:"none",
         dotOpacity:0.3,
+        altAr:[],
 
         loadRP:(
             fp,  //[ { coords: {lat: lat, lng: lng},  altit: altitude in meter }, ... ]
@@ -104,7 +105,6 @@ import rs from '@windy/rootScope';
 
         recalc:()=>{   //Obtain canvas width,  margin,  then offset in pixels for each waypoint and store as wpx, then make altitude path.
             if(rp.canvasw!=rplan.refs.canvas.offsetWidth){
-                //console.dir(rplan.refs.canvas);
                 rp.canvasw=rplan.refs.canvas.offsetWidth;
                 let col=rplan.refs.svg.children;  //col=htmlcollection
                 for (let i=0; i<col.length;i++){
@@ -126,32 +126,58 @@ import rs from '@windy/rootScope';
                 }
                 if (rp.altPath){
                     let pth=rp.makeAltPath();
-                    //console.log(pth);
                     rp.altPath.setAttributeNS(null, 'd', rp.makeAltPath());
                 }
             }
         },
         makeAltPath:w=>{
-            const {fp,wpx}=rp;
-            if (fp[0].hasOwnProperty("altit")){
-                if ((typeof w) === "undefined")w=rp.canvasw-rp.mrgn*2;
+            if (rp.altAr.length || fp[0].hasOwnProperty("altit")){
+
+                const {fp,wpx,mrgn}=rp;
+                if ((typeof w) === "undefined")w=rp.canvasw-mrgn*2;
                 let d=rp.elevs.data.distances;
                 let elev=rp.elevs.data.elevations;
 
-                let ypx=3.28084*150/12000;  //meter to pixels
-                let xpx=w/d[d.length-1];
-
-                let y=(elev[0]*ypx);
-                let x=rp.mrgn;
-                let pth=`M${x} ${(150-y)} `;
-                for (let j=0;j<elev.length;j++){
-                    x=rp.mrgn+xpx*d[j];
-                    let i=wpx.findIndex(e=>e>x)-1;
-                    let a=i<0?elev[j]:fp[i].altit;
-                    if (a<70)a=elev[j]; else if (a<330) a=elev[j]+100;
-                    y=(a<elev[j]?elev[j]:a)  *ypx;
-                    pth+=`L${x} ${(150-y)} `;
+                if (!rp.altAr.length){
+                    for (let i=0;i<wpx.length;i++){
+                        rp.altAr.push({x:(wpx[i]-mrgn)/w,altit:fp.altit});
+                    }
                 }
+
+                let ypx=3.28084*150/12000;  //meter to pixels
+                let dtot=d[d.length-1];
+                //let xpx=w/d[d.length-1];
+                let y=(elev[0]*ypx);
+                //let x=rp.mrgn;
+                let pth=`M${mrgn} ${(150-y)} `;
+                let xi=1;
+
+                let add2path=(x,y,el)=>{
+                    if (el>y)y=el;
+                    pth+=`L${(x*w)+mrgn} ${(150-y*ypx)} `;
+                };
+
+                for (let j=0;j<elev.length;j++){
+                    let xd=d[j]/dtot;
+                    for(; xi<rp.altAr.length-1 && rp.altAr[xi+1].x<xd; xi++){
+                        add2path(rp.altAr[xi+1].x,rp.altAr[xi+1].altit,elev[j]);
+                    }
+                    if (xi<rp.altAr.length-1){
+                        let xrtio=(xd-rp.altAr[xi].x) / (rp.altAr[xi+1].x-rp.altAr[xi].x);
+                        let yy= rp.altAr[xi].altit + xrtio*(rp.altAr[xi+1].altit-rp.altAr[xi].altit);
+                        add2path(xd,yy,elev[j]);
+                    }
+
+                    //x=rp.mrgn+xpx*d[j];
+                    //let i=wpx.findIndex(e=>e>x)-1;
+                    //let a=i<0?elev[j]:fp[i].altit;
+                    //if (a<70)a=elev[j]; else if (a<330) a=elev[j]+100;
+                    //y=(a<elev[j]?elev[j]:a)  *ypx;
+
+
+                }
+                add2path(1,0,elev[elev.length-1]);
+
                 return pth;
             }
         },

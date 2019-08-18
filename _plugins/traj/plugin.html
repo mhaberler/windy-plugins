@@ -402,26 +402,29 @@
     sampleAscDesRange.appendTo($("#setting-sampleAscDes"));
     sampleAscDesRange.addLabels(sampleOptsAD);
 
-    let mrkrIntervals=[5,10,15,20,30,60,180];
-    let mrkrIntvRange=new RangeEl("calc(100% - 160px)",6,0,1, $("#mrkrIntv-val"),
-        v=>mrkrIntervals[v], v=>mrkrIntervals.indexOf(v), rv=>(rv+ "min"),
+    let mrkrIntervals=[0,5*min1,10*min1, 15*min1,20*min1,30*min1,60*min1,180*min1];
+    let mrkrIntvRange=new RangeEl("calc(100% - 160px)",7,0,1, $("#mrkrIntv-val"),
+        v=>mrkrIntervals[v], v=>mrkrIntervals.indexOf(v), rv=>(Math.round(rv/min1)+ "min"),
         v=>{
-            mrkrIntv=v*60000;
+            mrkrIntv=v;
             localStorage.setItem("mrkrIntv",mrkrIntv);
             recalcTimeMrkrs(mrkrIntv, false);
         }
     );
     mrkrIntvRange.appendTo($("#setting-mrkrIntv"));
-    mrkrIntvRange.addLabels(mrkrIntervals);
+    mrkrIntvRange.addLabels(mrkrIntervals.map(e=>Math.round(e/min1)));
     mrkrIntvRange.input.addEventListener("change",()=>{
         if (ghostmrkr.k>=0){
             let k=ghostmrkr.k;
             let s=traj[k].sample;
-            for (var i=Number(mrkrIntvRange.input.value);  mrkrIntervals[i]%traj[k].sample && i<mrkrIntervals.length; i++);
-            //console.log(k,i,mrkrIntervals[i]);
-            mrkrIntvRange.calcInputVal(Math.round(mrkrIntv/60000));
-            if (traj[k].mrkrIntv!=mrkrIntervals[i]*60000){
-                traj[k].mrkrIntv=mrkrIntervals[i]*60000;
+            for (var i=Number(mrkrIntvRange.input.value);  mrkrIntervals[i] % (traj[k].sample*min1) && i<mrkrIntervals.length; i++);
+
+            mrkrIntv=mrkrIntervals[i];
+            mrkrIntvRange.calcInputVal(mrkrIntv);
+            recalcTimeMrkrs(mrkrIntv, false);
+
+            if (traj[k].mrkrIntv!=mrkrIntv){
+                traj[k].mrkrIntv=mrkrIntv;
                 if (rp.isOpen ){
                     map.fitBounds=()=>{};
                     setTimeout(()=>map.fitBounds=fitBoundsFx, 1000);
@@ -440,7 +443,7 @@
         decRange.calcInputVal(descent);
         sampleRange.calcInputVal(sample);
         sampleAscDesRange.calcInputVal(sampleAscDes);
-        mrkrIntvRange.calcInputVal(Math.round(mrkrIntv/60000));
+        mrkrIntvRange.calcInputVal(mrkrIntv);
     }
 
     /*function setDes(v){
@@ -537,13 +540,19 @@
             let k=ghostmrkr.k;
             let rt=[];
             let i,il,j,jl;
+            let altAr=[];
             for (i=0,il=traj[k].seg.length;i<il;i++){
                 let sg=traj[k].seg[i];
                 for (j=0,jl=sg.pnts.length;j<jl;j++){
                     let p=sg.pnts[j];
-                    if (p.mrkr || (i==0 && j==0) || (i==il-1 && j==jl-1)) rt.push({coords:{lat:p.lat,lng:p.lng},altit:p.altm});
+                    if (p.mrkr || (i==0 && j==0) || (i==il-1 && j==jl-1))
+                        rt.push({coords:{lat:p.lat,lng:p.lng},altit:p.altm});
+                    altAr.push({x:p.dist/traj[k].dist,altit:(p.altm>traj[k].altm?traj[k].altm:p.altm)});
                 }
             }
+            rplannerOptions.altAr=altAr;
+
+
             //console.log(rt);
             let res=rp.loadRP(
                 rt,rplannerOptions,
@@ -717,7 +726,7 @@
             //console.log(ghostmrkr.k,tr.k);
             if (all || ghostmrkr.k==tr.k) tr.seg.forEach(sg=>sg.pnts.forEach(pnt=>{
                 if (pnt.mrkr)pnt.mrkr.remove();
-                pnt.mrkr=(pnt.t%intv==0? (L.circleMarker(pnt,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false}).addTo(map)) : false);
+                pnt.mrkr=(intv==0 || pnt.t%intv==0)? L.circleMarker(pnt,{radius:1, color:"black", weight:4,  opacity:0.8, interactive:false}).addTo(map) : false;
             }))
         });
     }
@@ -814,6 +823,7 @@
         let previ=-99;
         let j=-1;
         let n=0;
+        let descending=false;
 
         let fetchData=(c,t,lvl)=>{
             store.set("timestamp",t);
@@ -861,14 +871,15 @@
                             }
 
                             console.log(traj[k].mrkrIntv);
-                            mrkrIntvRange.calcInputVal(Math.round(traj[k].mrkrIntv/60000));
+                            mrkrIntvRange.calcInputVal(traj[k].mrkrIntv);
                         });
                         previ=i;
                     }
 
+
                     let endTraj=false;
                     let smpl=sampleAscDes;
-                    let pntElev=data.data.header.elevation
+                    let pntElev=data.data.header.elevation;
 
                     //look for phase and determine next alt.  With start of traj pntAltm=-9999
                     if (traj[k].lvl=="surface"){
@@ -883,9 +894,12 @@
                             } else {
                                 pntAltm=pntElev;
                             }
-                        } else if (t>=startt+durmin*min1 || (backw && t<=startt-durmin*min1)){    // duration hit,  start descent ////allow backward traj
+                        } else if (descending || (t>=startt+durmin*min1 || (backw && t<=startt-durmin*min1))){    // duration hit,  start descent ////allow backward traj
                             if (descent==0 || (pntAltm<=pntElev+10)) endTraj=true;  //stop if BGL or none descent selected
-                            else pntAltm-=descent*smpl*60;
+                            else {
+                                if (descending) pntAltm-=descent*smpl*60;
+                                else descending=true;
+                            }
                         } else if (pntAltm<traj[k].altm){     //still rising.
                             pntAltm+=ascent*smpl*60;
                             if (pntAltm>=traj[k].altm){       //now  altitude reached
