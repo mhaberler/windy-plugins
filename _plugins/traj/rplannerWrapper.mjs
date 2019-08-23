@@ -6,29 +6,22 @@ import bcast from  '@windy/broadcast';
 import picker from  '@windy/picker';
 import rs from '@windy/rootScope';
 
-
     let rplan=W.plugins.rplanner;
-
-
     let calendarDiv=$("#calendar")?$("#calendar").innerHTML:"";
-
     let scrollpos=0;
     let xpos=0;
     let mapclickAr;
-    let allowMoveInfo=true;
+    let allowSendPosition=true;
     let mustHideDot=true;
     let overCanvas=false;
-
     let elevBut, boatBut, vfrBut, carBut;
     let openPluginBtn, toggleDist;
 
-    window.addEventListener("beforeunload",e=>{
+    window.addEventListener("beforeunload",e=>{   //when overscrolling to the right,  the page wants to reload.
         if (overCanvas){
             e.preventDefault(); e.returnValue = '';  return false;
         }
     });
-
-    console.log(bcast);
 
     let rp={
         canvasw:0,
@@ -42,6 +35,7 @@ import rs from '@windy/rootScope';
         pathsDisplay:"none",
         distanceDisplay:"none",
         dotOpacity:0.3,
+        pickerActive:false,
         altAr:[],
 
         loadRP:(
@@ -59,17 +53,14 @@ import rs from '@windy/rootScope';
             }else  {
 
                 rp.fp=fp;
-                for(let p in options)
-                    if (rp.hasOwnProperty(p))rp[p]=options[p];
-                 //let opts=["myPluginName","helpText","openPluginText","left","interactive","pathsDisplay","distanceDisplay","dotOpacity"];
-                    //let i=opts.indexOf(p);
-
+                for(let p in options) if (rp.hasOwnProperty(p))rp[p]=options[p];
                 rp.sendPosition=sendPosition;
                 rp.onCloseCbf=onCloseCbf;
                 rp.elevs=false;
                 rp.wpx=[];
                 rp.myPlugin=W.plugins[rp.myPlugin];
-                console.log(rp);
+                //console.log(rp);
+                rp.canvasw=0; rp.mrgn=0;
 
                 let routestr="";
                 for (let i=0; i<fp.length; i++){ routestr+=fp[i].coords.lat+","+fp[i].coords.lng+"; "}
@@ -78,10 +69,14 @@ import rs from '@windy/rootScope';
                 W.http.get("/rplanner/v1/elevation/" +routestr).then((res,rej)=>{
                     rp.elevs=res;
                 });
-                if (rplan.isOpen) setTimeout(()=>{
-                    rp.recalc();
-                    setOptions();
-                },500);     //if not open,  recalc and setOptions will be called from pluginOpened listener.
+                if (rplan.isOpen){       //if not already open,  recalc and setOptions will be called from pluginOpened listener.
+                    elevBut.click(); vfrBut.click();
+                    wait4elevAndLabels(()=>{
+                        rp.recalc();
+                        setOptions();
+                    });
+                };
+
                 return true;
             }
         },
@@ -93,18 +88,13 @@ import rs from '@windy/rootScope';
                     rplan.element.style.width= `calc(100% - ${lft}px)`;
                     openPluginBtn.style.display=lft?"none":"block";
                     elevBut.click(); vfrBut.click();
-                    let count=0;
-                    let f=()=>{
-                        count++;
-                        if (rplan.refs.svg.children.length>3 && rp.elevs)setTimeout(rp.recalc,500);
-                        else {if(count<100)setTimeout(f,100);else console.log("LOADING TIMED OUT");}
-                    };f();
+                    wait4elevAndLabels(rp.recalc);
                 },500);
             }
         },
 
         recalc:()=>{   //Obtain canvas width,  margin,  then offset in pixels for each waypoint and store as wpx, then make altitude path.
-            if(rp.canvasw!=rplan.refs.canvas.offsetWidth){
+            //if(rp.canvasw!=rplan.refs.canvas.offsetWidth){
                 rp.canvasw=rplan.refs.canvas.offsetWidth;
                 let col=rplan.refs.svg.children;  //col=htmlcollection
                 for (let i=0; i<col.length;i++){
@@ -119,6 +109,7 @@ import rs from '@windy/rootScope';
                 }
                 rp.wpx.splice(0,0,rp.mrgn);
                 rp.wpx.push(rp.canvasw-rp.mrgn);
+
                 if (rp.altSvg) {
                     let vb=`0 0 ${rp.canvasw} 150`;
                     rp.altSvg.style.width=rp.canvasw+"px";
@@ -128,7 +119,7 @@ import rs from '@windy/rootScope';
                     let pth=rp.makeAltPath();
                     rp.altPath.setAttributeNS(null, 'd', rp.makeAltPath());
                 }
-            }
+            //}
         },
         makeAltPath:w=>{
             if (rp.altAr.length || fp[0].hasOwnProperty("altit")){
@@ -146,9 +137,7 @@ import rs from '@windy/rootScope';
 
                 let ypx=3.28084*150/12000;  //meter to pixels
                 let dtot=d[d.length-1];
-                //let xpx=w/d[d.length-1];
                 let y=(elev[0]*ypx);
-                //let x=rp.mrgn;
                 let pth=`M${mrgn} ${(150-y)} `;
                 let xi=1;
 
@@ -167,17 +156,8 @@ import rs from '@windy/rootScope';
                         let yy= rp.altAr[xi].altit + xrtio*(rp.altAr[xi+1].altit-rp.altAr[xi].altit);
                         add2path(xd,yy,elev[j]);
                     }
-
-                    //x=rp.mrgn+xpx*d[j];
-                    //let i=wpx.findIndex(e=>e>x)-1;
-                    //let a=i<0?elev[j]:fp[i].altit;
-                    //if (a<70)a=elev[j]; else if (a<330) a=elev[j]+100;
-                    //y=(a<elev[j]?elev[j]:a)  *ypx;
-
-
                 }
                 add2path(1,0,elev[elev.length-1]);
-
                 return pth;
             }
         },
@@ -213,15 +193,12 @@ import rs from '@windy/rootScope';
         },
 
         setInteractive:interact=>{
-            console.log("setInteract");
             setTimeout(()=>{
                 rp.getDistanceIcons();
                 if (interact){
                     rp.distanceIcons.forEach(e=>{
                         e.style.pointerEvents="auto";
                         e.style.opacity=1;
-
-                        //map.on("click",mapclick);
                     });
                     restoreMapClicks();
                     rp.interactive=true;
@@ -229,8 +206,6 @@ import rs from '@windy/rootScope';
                     rp.distanceIcons.forEach(e=>{
                         e.style.pointerEvents="none";
                         e.style.opacity=0.7;
-
-                        //map.off("click");
                     });
                     stopMapClicks();
                     rp.interactive=false;
@@ -265,6 +240,12 @@ import rs from '@windy/rootScope';
             },100);
         },
 
+        removeFlashingDots:()=>{
+            map.eachLayer(l=>{
+                    if(l.options&&l.options.icon&&l.options.icon.options.className=="icon-dot") l.remove();
+            });
+        },
+
         moveSliderLine:v=>{
              if (rplan.isOpen){
                 xpos= rp.mrgn+(rp.canvasw-rp.mrgn*2)*v;
@@ -285,41 +266,46 @@ import rs from '@windy/rootScope';
             //map.on("click",mapclick);
             restoreMapClicks();
             rp.isOpen=false;
-            allowMoveInfo=true;
+            allowSendPosition=true;
             mustHideDot=true;
             overCanvas=false;
             scrollpos=0;
-            if(typeof rp.onCloseCbf ==="function")
-            rp.onCloseCbf();
+            rp.removeFlashingDots();
+            if(typeof rp.onCloseCbf ==="function")    rp.onCloseCbf();
         }
     }
 
-   // bcast.on("mapChanged",e=>{console.log(e); });
-
-
     function setOptions(){
-        console.log("set options");
         rp.setInteractive(rp.interactive);
         rp.setPathsDisplay(rp.pathsDisplay);
         rp.setDistanceDisplay(rp.distanceDisplay);
     }
-
     function stopMapClicks(){ //stop anon functions (which is the windy mapclick fxs),  reattach named functions
         map.off("click");
         mapclickAr.forEach(fn=>{
             if (fn.name){map.on("click",fn)}
         })
+        //attach rqstopen
+        if (rp.pickerActive) map.on("click",e=>{bcast.fire('rqstOpen','picker',{lat:e.latlng.lat,lon:e.latlng.lng})});
     }
     function restoreMapClicks(){ //restore all click functions stored in mapclickAr
         map.off("click");
         mapclickAr.forEach(fn=>map.on("click",fn));
     }
+    function wait4elevAndLabels(cb){
+        let c=0;
+        let f=()=>{
+            if (rplan.refs.svg.children.length>3 && rp.elevs)setTimeout(cb,1000);
+            else {if(c<100)setTimeout(f,100);else console.log("LOADING TIMED OUT");}
+        };f();
+    }
 
-    bcast.on("pluginOpened",e=>{if (e=="rplanner") {
 
-        //////creates DOM elements and sets listeners
-        console.log("RPLANNER Opened");
+    bcast.on("pluginOpened",e=>{if (e=="rplanner") {   //////creates DOM elements and sets listeners when first opened.
+
         bcast.fire("rqstClose",picker);
+        //console.log(rplan);
+
 
         //grab mapclick fxs
         mapclickAr=map._events.click.map(e=>e.fn);
@@ -347,18 +333,18 @@ import rs from '@windy/rootScope';
             if (scrollpos==rplan.refs.dataTable.scrollLeft){
                 xpos=e.offsetX;
                 rp.ratio=(xpos-rp.mrgn)/(rp.canvasw-rp.mrgn*2);
-                if(allowMoveInfo){
+                if(allowSendPosition){
                     rp.sendPosition(rp.ratio);
-                    allowMoveInfo=false;
+                    allowSendPosition=false;
                     setTimeout(()=>{
-                        allowMoveInfo=true;
-                        setTimeout(()=>{if(allowMoveInfo)rp.sendPosition(rp.ratio)},50);
+                        allowSendPosition=true;
+                        setTimeout(()=>{if(allowSendPosition)rp.sendPosition(rp.ratio)},50);
                     },50);
                 }
             }
         });
 
-        rplan.refs.dataTable.addEventListener("scroll",e=>{
+        rplan.refs.dataTable.addEventListener("scroll",e=>{  //when reloading canvas after timestamp changed,  scrollLeft is set to 0:   eventlistener to detect this and set scrollLeft to previous scrollpos
             if(rplan.refs.dataTable.scrollLeft>0 || Math.abs(rplan.refs.dataTable.scrollLeft-scrollpos)<40){
                 scrollpos=rplan.refs.dataTable.scrollLeft;
             } else {
@@ -366,7 +352,7 @@ import rs from '@windy/rootScope';
             }
         });
 
-        rplan.element.style.transition="left 0.4s";
+        rplan.element.style.transition="left 0.4s, opacity 0.4s";
 
         openPluginBtn=document.createElement("div");
         openPluginBtn.innerHTML=rp.openPluginText;
@@ -430,10 +416,7 @@ import rs from '@windy/rootScope';
         rp.altPath.setAttributeNS(null, 'd', "");
         rp.altPath.setAttributeNS(null, 'fill', "none");
         rp.altPath.setAttributeNS(null, 'opacity', 1.0);
-        //rp.altPath.setAttributeNS(null, 'width', "100%");
-        //rp.altPath.setAttributeNS(null, 'height', "100%");
         rp.altSvg.appendChild(rp.altPath);
-
         rplan.refs.dataTable.appendChild(rp.altSvg);
 
         boatBut=$("[data-do='set,boat']");
@@ -446,7 +429,6 @@ import rs from '@windy/rootScope';
         elevBut.addEventListener("click", ()=>{rp.altSvg.style.display="none";});
         vfrBut.click();
 
-        console.log(rp.myPlugin.isOpen);
         setTimeout(()=>rp.setLeft(rp.myPlugin.isOpen?rp.left:0),500);
     }});
 

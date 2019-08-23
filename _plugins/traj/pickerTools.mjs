@@ -127,6 +127,8 @@ function drag(cbf, interv=100){          //by default the picker is cbf is reque
                         pckr=l;
                         tries=0;
                         pckr.on("drag",pckrMovef);
+                        pckr.on("dragstart",()=>{if($("#plugin-rplanner"))$("#plugin-rplanner").style.opacity=0});
+                        pckr.on("dragend",()=>{if($("#plugin-rplanner"))$("#plugin-rplanner").style.opacity=1});
                     }
                 });
                 if (!pckr._icon){tries++;if(tries<10)setTimeout(wait4pckr,200);}
