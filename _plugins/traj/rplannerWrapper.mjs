@@ -14,8 +14,9 @@ import rs from '@windy/rootScope';
     let allowSendPosition=true;
     let mustHideDot=true;
     let overCanvas=false;
-    let elevBut, boatBut, vfrBut, carBut;
+    let elevBut, boatBut, vfrBut, ifrBut, airgramBut, carBut;
     let openPluginBtn, toggleDist;
+    let fr;
 
     window.addEventListener("beforeunload",e=>{   //when overscrolling to the right,  the page wants to reload.
         if (overCanvas){
@@ -36,7 +37,8 @@ import rs from '@windy/rootScope';
         distanceDisplay:"none",
         dotOpacity:0.3,
         pickerActive:false,
-        altAr:[],
+        altAr:[],    //altAr is set in options.
+        pathAr:[],   //pathAr is calculated based on elev data,  used to calculate svg path depending on canvas width,  height and margin
 
         loadRP:(
             fp,  //[ { coords: {lat: lat, lng: lng},  altit: altitude in meter }, ... ]
@@ -58,6 +60,7 @@ import rs from '@windy/rootScope';
                 rp.onCloseCbf=onCloseCbf;
                 rp.elevs=false;
                 rp.wpx=[];
+                rp.pathAr=[];
                 rp.myPlugin=W.plugins[rp.myPlugin];
                 //console.log(rp);
                 rp.canvasw=0; rp.mrgn=0;
@@ -66,11 +69,15 @@ import rs from '@windy/rootScope';
                 for (let i=0; i<fp.length; i++){ routestr+=fp[i].coords.lat+","+fp[i].coords.lng+"; "}
                 routestr=routestr.slice(0,-2);
                 rplan.open(routestr);
+
                 W.http.get("/rplanner/v1/elevation/" +routestr).then((res,rej)=>{
                     rp.elevs=res;
+                    rp.makeAltAr();
                 });
+
                 if (rplan.isOpen){       //if not already open,  recalc and setOptions will be called from pluginOpened listener.
-                    elevBut.click(); vfrBut.click();
+                    //elevBut.click();
+                    //fr=="vfr"?vfrBut.click():ifrBut.click();
                     wait4elevAndLabels(()=>{
                         rp.recalc();
                         setOptions();
@@ -87,7 +94,7 @@ import rs from '@windy/rootScope';
                     rplan.element.style.left=lft+"px";
                     rplan.element.style.width= `calc(100% - ${lft}px)`;
                     openPluginBtn.style.display=lft?"none":"block";
-                    elevBut.click(); vfrBut.click();
+                    elevBut.click(); fr=="vfr"?vfrBut.click():ifrBut.click();
                     wait4elevAndLabels(rp.recalc);
                 },500);
             }
@@ -109,23 +116,14 @@ import rs from '@windy/rootScope';
                 }
                 rp.wpx.splice(0,0,rp.mrgn);
                 rp.wpx.push(rp.canvasw-rp.mrgn);
-
-                if (rp.altSvg) {
-                    let vb=`0 0 ${rp.canvasw} 150`;
-                    rp.altSvg.style.width=rp.canvasw+"px";
-                    rp.altSvg.setAttributeNS(null, "viewBox", vb);
-                }
-                if (rp.altPath){
-                    let pth=rp.makeAltPath();
-                    rp.altPath.setAttributeNS(null, 'd', rp.makeAltPath());
-                }
-            //}
+                rp.makeAltPath(fr);
         },
-        makeAltPath:w=>{
+
+        makeAltAr:()=>{
             if (rp.altAr.length || fp[0].hasOwnProperty("altit")){
 
+                let mx=-Infinity;
                 const {fp,wpx,mrgn}=rp;
-                if ((typeof w) === "undefined")w=rp.canvasw-mrgn*2;
                 let d=rp.elevs.data.distances;
                 let elev=rp.elevs.data.elevations;
 
@@ -135,33 +133,50 @@ import rs from '@windy/rootScope';
                     }
                 }
 
-                let ypx=3.28084*150/12000;  //meter to pixels
                 let dtot=d[d.length-1];
-                let y=(elev[0]*ypx);
-                let pth=`M${mrgn} ${(150-y)} `;
                 let xi=1;
 
-                let add2path=(x,y,el)=>{
-                    if (el>y)y=el;
-                    pth+=`L${(x*w)+mrgn} ${(150-y*ypx)} `;
+                let add2pathAr=(x,y,el)=>{
+                    if (el>y)y=el;  rp.pathAr.push([x,y]);
+                    if(y>mx)mx=y;
                 };
 
+                rp.pathAr=[];
                 for (let j=0;j<elev.length;j++){
                     let xd=d[j]/dtot;
                     for(; xi<rp.altAr.length-1 && rp.altAr[xi+1].x<xd; xi++){
-                        add2path(rp.altAr[xi+1].x,rp.altAr[xi+1].altit,elev[j]);
+                        add2pathAr(rp.altAr[xi+1].x,rp.altAr[xi+1].altit,elev[j]);
                     }
                     if (xi<rp.altAr.length-1){
                         let xrtio=(xd-rp.altAr[xi].x) / (rp.altAr[xi+1].x-rp.altAr[xi].x);
                         let yy= rp.altAr[xi].altit + xrtio*(rp.altAr[xi+1].altit-rp.altAr[xi].altit);
-                        add2path(xd,yy,elev[j]);
+                        add2pathAr(xd,yy,elev[j]);
                     }
                 }
-                add2path(1,0,elev[elev.length-1]);
+                add2pathAr(1,0,elev[elev.length-1]);
+                console.log(rp.pathAr);
+                fr= (mx>12000/3.28084)?"ifr":"vfr";
+            }
+        },
+        makeAltPath:fr=>{
+            if (rp.pathAr.length){
+                const {mrgn}=rp;
+                let w=rp.canvasw-mrgn*2;
+                let h=fr=="vfr"?150:242;
+                let ypx=fr=="vfr"?3.28084*h/12000:1/61.5;  //meter to pixels
+                let pth=``;
+                for (let i=0;i<rp.pathAr.length;i++){
+                    let x=rp.pathAr[i][0], y= rp.pathAr[i][1];
+                    pth+=(i==0?"M":"L")+`${(x*w)+mrgn} ${(h-y*ypx)} `;
+                }
+                let vb=`0 0 ${rp.canvasw} ${h}`;
+                rp.altSvg.style.width=rp.canvasw+"px";
+                rp.altSvg.style.height=h+"px";
+                rp.altSvg.setAttributeNS(null, "viewBox", vb);
+                rp.altPath.setAttributeNS(null, 'd', pth);
                 return pth;
             }
         },
-
         getDistanceIcons:()=>{
             rp.distanceIcons=[];
             map.eachLayer(l=>{
@@ -279,6 +294,7 @@ import rs from '@windy/rootScope';
         rp.setInteractive(rp.interactive);
         rp.setPathsDisplay(rp.pathsDisplay);
         rp.setDistanceDisplay(rp.distanceDisplay);
+        if(fr=="vfr")vfrBut.click();else ifrBut.click();
     }
     function stopMapClicks(){ //stop anon functions (which is the windy mapclick fxs),  reattach named functions
         map.off("click");
@@ -317,6 +333,7 @@ import rs from '@windy/rootScope';
 
         setTimeout(setOptions,500);//wait for elements to appear
 
+        rplan.refs.canvas.style.cursor="crosshair";
         rplan.refs.canvas.addEventListener("mouseenter", e=> {
             xpos=e.offsetX;
             overCanvas=true;
@@ -330,7 +347,9 @@ import rs from '@windy/rootScope';
         });
 
         rplan.refs.canvas.addEventListener("mousemove",e=>{
+            console.log(scrollpos  ,rplan.refs.dataTable.scrollLeft );
             if (scrollpos==rplan.refs.dataTable.scrollLeft){
+                console.log(e.offsetY);
                 xpos=e.offsetX;
                 rp.ratio=(xpos-rp.mrgn)/(rp.canvasw-rp.mrgn*2);
                 if(allowSendPosition){
@@ -341,7 +360,7 @@ import rs from '@windy/rootScope';
                         setTimeout(()=>{if(allowSendPosition)rp.sendPosition(rp.ratio)},50);
                     },50);
                 }
-            }
+            } else setTimeout(()=>{scrollpos=rplan.refs.dataTable.scrollLeft},100);
         });
 
         rplan.refs.dataTable.addEventListener("scroll",e=>{  //when reloading canvas after timestamp changed,  scrollLeft is set to 0:   eventlistener to detect this and set scrollLeft to previous scrollpos
@@ -404,7 +423,7 @@ import rs from '@windy/rootScope';
         let xmlns = "http://www.w3.org/2000/svg";
         rp.altSvg = document.createElementNS(xmlns, "svg");
         rp.altSvg.setAttributeNS(null, 'preserveAspectRatio', "none");
-        rp.altSvg.setAttributeNS(null, "height", 150);
+
         rp.altSvg.style.display="none";
         rp.altSvg.style.pointerEvents="none";
         rp.altSvg.style.position="absolute";
@@ -419,15 +438,47 @@ import rs from '@windy/rootScope';
         rp.altSvg.appendChild(rp.altPath);
         rplan.refs.dataTable.appendChild(rp.altSvg);
 
+       /* rp.alts  =document.createElementNS(xmlns, "path");
+        rp.alts.setAttributeNS(null, 'stroke', "black");
+        rp.alts.setAttributeNS(null, 'stroke-width', 1);
+        rp.alts.setAttributeNS(null, 'stroke-linejoin', "round");
+        rp.alts.setAttributeNS(null, 'd', `
+        M0 30 L20 30
+        M0 50 L20 50
+        M0 80 L20 80
+        M0 130 L20 130
+        M0 150 L20 150
+        M0 175 L20 175
+        M0 190 L20 190
+        M0 210 L20 210
+        M0 230 L20 230
+        `);
+        rp.alts.setAttributeNS(null, 'fill', "none");
+        rp.alts.setAttributeNS(null, 'opacity', 1.0);
+        rp.altSvg.appendChild(rp.alts);*/
+
+        rplan.refs.dataTable.appendChild(rp.altSvg);
+
         boatBut=$("[data-do='set,boat']");
         elevBut= $("[data-do='set,elevation']");
         vfrBut=$("[data-do='set,vfr']");
         carBut=$("[data-do='set,car']");
-        vfrBut.addEventListener("click", ()=>{rp.altSvg.style.display="block";});
+        airgramBut=$("[data-do='set,airgram']");
+        ifrBut=$("[data-do='set,ifr']");
+        vfrBut.addEventListener("click", ()=>{
+            fr="vfr";
+            rp.makeAltPath(fr);
+            rp.altSvg.style.display="block";});
+        ifrBut.addEventListener("click", ()=>{
+            fr="ifr";
+            rp.makeAltPath(fr);
+            rp.altSvg.style.display="block";});
         boatBut.addEventListener("click", ()=>{rp.altSvg.style.display="none";});
         carBut.addEventListener("click", ()=>{rp.altSvg.style.display="none";});
         elevBut.addEventListener("click", ()=>{rp.altSvg.style.display="none";});
-        vfrBut.click();
+        airgramBut.addEventListener("click", ()=>{rp.altSvg.style.display="none";});
+
+        //vfrBut.click();
 
         setTimeout(()=>rp.setLeft(rp.myPlugin.isOpen?rp.left:0),500);
     }});
