@@ -29,6 +29,14 @@
 
         const load = pluginDataLoader(options);
 
+	function download(content, fileName, contentType) {
+	    var a = document.createElement("a");
+	    var file = new Blob([content], {type: contentType});
+            a.href = URL.createObjectURL(file);
+            a.download = fileName;
+            a.click();
+        }
+
         var marker = null;
 
         // Called when opened
@@ -90,6 +98,10 @@
             graph.init(this.refs);
 
             load('airData', dataOptions).then(airData => {
+		let tmp = airData;
+		tmp.lat = lat;
+		tmp.lon = lon;
+		download(JSON.stringify(tmp, null, 2), 'heidi.json', 'text/plain'); 
                 graph.load(lat, lon, airData.data);
             });
         };
