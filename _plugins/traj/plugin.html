@@ -1,4 +1,5 @@
 <plugin>
+
     <div class="mobile-header" style="font-weight:bold">Trajectory Plugin</div>
     <div id="main" class="plugin-content">
         <div id="desktop-title" class="title">Trajectory Plugin</div><br>
@@ -425,6 +426,8 @@
         mrkrIntvRange.calcInputVal(mrkrIntv);
     }
 
+
+
     function showMsg(m){
         msgdiv.innerHTML=m;
         document.getElementById("map-container").appendChild(msgdiv);
@@ -479,16 +482,25 @@
         // altitudeAccuracy: null
         // heading: null
         // speed: null
+        let msg = "lat: " + lat.toPrecision(5) + " lon:" + lng.toPrecision(5);
         if (p.coords.altitude) {
-          console.log('have altitude:',p.coords.altitude, 'accuracy:',p.coords.altitudeAccuracy );
+          msg = msg + "<br>altiude: " + p.coords.altitude.toString();
+          msg = msg + "<br>accuracy: " + p.coords.altitudeAccuracy.toString();
           // possibly select altitude levels here
         } else {
-          console.log('altitude not available');
+          msg = msg + "<br>altitude not available";
         }
         map.setView({ lat: lat, lng: lng }, 9);
         setTimeout(function () {
+          // not sure what this timeout is for..
           return bcast.fire('rqstOpen', 'picker', { lat: lat, lon: lng });
         }, 2000);
+
+        var popup = L.popup()
+                  .setLatLng({ lat: lat, lng: lng })
+                  .setContent(msg)
+                  .openOn( map );
+
         console.log('picker set', lat, lng);
     }
 
