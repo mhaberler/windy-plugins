@@ -253,6 +253,9 @@
             ><div id="clear-trajs" class="start-buttons">
                 Clear
             </div
+            ><div id="here-trajs" class="start-buttons">
+                Here
+            </div
             ><div id="backw" class="start-buttons" >
                 ${backw?"Forw":"Back"}
             </div
@@ -460,6 +463,53 @@
         }));
         traj=[];
     });
+
+    function failureCallbackPos(e){
+      console.log('getCurrentPosition failed:',e);
+    }
+
+    function successCallbackPos(p){
+        bcast.fire('rqstClose', 'picker')
+        let lat = p.coords.latitude;
+        let lng = p.coords.longitude;
+        // latitude: 47.1212032
+        // longitude: 15.2264704
+        // altitude: null
+        // accuracy: 2210
+        // altitudeAccuracy: null
+        // heading: null
+        // speed: null
+        if (p.coords.altitude) {
+          console.log('have altitude:',p.coords.altitude, 'accuracy:',p.coords.altitudeAccuracy );
+          // possibly select altitude levels here
+        } else {
+          console.log('altitude not available');
+        }
+        map.setView({ lat: lat, lng: lng }, 9);
+        setTimeout(function () {
+          return bcast.fire('rqstOpen', 'picker', { lat: lat, lon: lng });
+        }, 2000);
+        console.log('picker set', lat, lng);
+    }
+
+    $("#here-trajs").addEventListener("click",()=>{
+      if (navigator.geolocation) {
+        console.log('have location');
+        // maximumAge: integer (milliseconds) | infinity - maximum cached position age.
+        // timeout: integer (milliseconds) - amount of time before the error callback is invoked, if 0 it will never invoke.
+        // enableHighAccuracy: false | true
+        var positionoptions = {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 10000
+        };
+        navigator.geolocation.getCurrentPosition(successCallbackPos,
+          failureCallbackPos, positionoptions);
+      } else {
+        console.log('no geolocation available');
+      }
+    });
+
     $("#backw").addEventListener("click",e=>{           ////allow backward traj
         backw=!backw;
         let tmp=ascent; ascent=descent; descent=tmp;
