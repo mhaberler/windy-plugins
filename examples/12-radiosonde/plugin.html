@@ -145,22 +145,7 @@
 
     function dataURI(sid, ascent) {
         var ts = new Date(ascent.syn_timestamp * 1000).toJSON();
-        if (summaryFmt < 4) {
-            return datapath +
-                source_map[ascent.source] +
-                sid.substring(0, 2) + "/" +
-                sid.substring(2, 5) + "/" +
-                sid + "_" +
-                ts.substring(0, 4) +
-                ts.substring(5, 7) +
-                ts.substring(8, 10) + "_" +
-                ts.substring(11, 13) +
-                ts.substring(14, 16) +
-                ts.substring(17, 19) +
-                ".geojson";
-        }
-        else {
-            return datapath +
+        return datapath +
                 source_map[ascent.source] +
                 sid.substring(0, 2) + "/" +
                 sid.substring(2, 5) + "/" +
@@ -174,8 +159,8 @@
                 ts.substring(14, 16) +
                 ts.substring(17, 19) +
                 ".geojson";
-        }
     }
+
 
     const windDirection = (x,y) => ((2*Math.PI + Math.atan2(x,y))*180/Math.PI)%360;
 
