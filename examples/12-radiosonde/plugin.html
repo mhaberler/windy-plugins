@@ -1,0 +1,262 @@
+<plugin>
+
+<div class="sliding-x" data-ref="slidingX"></div>
+
+<div id="radiosonde-container" class="plugin-content" >
+
+    <div class="desktab-heading size-xl" ><b>Radiosonde</b></div>
+    <div class="mobile-title" >Radiosonde</div>
+    <div id="skewt-container" class="skew-t"></div>
+
+</div>
+
+<div class="bottom-border-mobile">a</div>
+<div class="closing-x collapse-pane"></div>
+
+<script>
+    import $ from '@windy/$';
+    import map from '@windy/map';
+    import picker from '@windy/picker';
+    import rs from '@windy/rootScope';
+    import bcast from '@windy/broadcast';
+    //import drag from '@windy/Drag';
+    //import trans from '@windy/trans';
+    import _ from '@windy/utils';
+    //import Calendar from '@windy/Calendar';
+    import store from '@windy/store';
+    import allPlugins from '@windy/plugins';
+    import Color from '@windy/Color';
+
+    //import BindedCheckbox from '@windy/BindedCheckbox';
+    //import Switch from '@windy/Switch';
+    //import BindedSwitch from '@windy/BindedSwitch';
+    //import Bar from '@windy/Bar';
+    //import Scrollable from '@windy/Scrollable';
+    //import format from '@windy/format';
+    //import Drag from '@windy/Drag';  use bottomSlide
+    //import BottomSlide from '@windy/BottomSlide';
+
+    import pluginDataLoader from '@windy/plugins/plugin-data-loader';
+
+    import ib from './infobox.mjs';
+
+
+    const load = pluginDataLoader({
+        key: 'tqBdvHJjtNrGq4TrFzt9D5NDz9fIZSC8'
+        , plugin: 'windy-plugin-da'
+    });
+
+    //import urls from '@windy/urls';
+    //import http from '@windy/http';
+
+    const thisPlugin=this;
+    const skewt=new SkewT("#skewt-container");
+
+    const dayMs=1000*60*60*24;
+    const h1=1000*60*60;
+
+    const maxAge=168; //hours in a week.
+    let reqAge=24;
+    let prevColor, prevMarker;
+    let markers=[];
+
+    const datapath="https://radiosonde.mah.priv.at/data-dev/";
+    let summaryFmt;
+
+    ////marker properties and colors
+
+    var markerOptions = {
+        radius: 8,
+        color:"white",
+        weight: 1,
+        opacity: 1,
+        fillOpacity: 0.7,
+        className: "context-menu-marker",
+        bubblingMouseEvents: false
+    };
+
+    var markerSelectedColor = "OrangeRed";
+
+    var viridisStops = ['#440154', '#482777', '#3F4A8A', '#31678E', '#26838F', '#1F9D8A', '#6CCE5A', '#B6DE2B', '#FEE825'];
+
+    function hex2RgbA(a){
+        return a.match(/#(..)(..)(..)/).filter((n,i)=>i).map(n=>parseInt(n,16)).concat(0);
+    }
+
+    const ageColorsInstance = Color.instance({
+        ident: 'ageColors',
+        steps: 1024,
+        default: viridisStops.slice(0).reverse().map((a,i)=>[i*4,hex2RgbA(a)])
+    });
+
+    const ageColors = ageColorsInstance.getColor.call(ageColorsInstance);
+
+    const getAgeColor = age => {  //age in hours
+        const [R, G, B] = ageColors.RGBA.call(ageColors, age);
+        return `rgba(${R},${G},${B}, 1)`;
+    };
+
+    const getOpacity = ({age}) => {
+        return age>reqAge+6?0: age>reqAge? (age-reqAge)/6: 1;
+    }
+
+
+
+    ////infobox wiht age slider
+    this.refs.infobox = ib(
+        `
+        <div id="open-radiosonde-plugin" class='radiosonde-button inlined' data-icon='d' >Radiosonde</div>
+        <div id="radiosonde-age-value" class='radiosonde-button'></div>
+        <div id="radiosonde-range-container">
+            <input id="radiosonde-range" type="range" max="168" min="0" step="1">
+        </div>
+        `
+        , "open-radiosonde-plugin" //id of the button which will open the left hand pane
+        , this  //reference to this plugin
+        , rs.isMobile?true:false  //true = hide this box when plugin opens
+        //optionally send fx
+    )
+    $("#radiosonde-range-container").style.background=`linear-gradient(90deg,${viridisStops.join(",")})`;
+
+    const handleAgeRangeInput = () => {
+        reqAge= 168 - $("#radiosonde-range").value;
+        $("#radiosonde-age-value").innerHTML =  `Newer than ${reqAge} hrs`;
+        markers.forEach(m=>{
+            if(m.age<reqAge){
+                m.addTo(map)
+            } else {
+                m.remove();
+            }
+        });
+    }
+
+    $("#radiosonde-range").addEventListener("input", handleAgeRangeInput);
+
+    $("#radiosonde-range").value= maxAge - (reqAge = 24);
+
+    //// draw circles
+
+    const source_map = {
+        netCDF: "madis/",
+        BUFR: "gisc/",
+        madis: "madis/",
+        gisc: "gisc/"
+    };
+
+    function dataURI(sid, ascent) {
+        var ts = new Date(ascent.syn_timestamp * 1000).toJSON();
+        if (summaryFmt < 4) {
+            return datapath +
+                source_map[ascent.source] +
+                sid.substring(0, 2) + "/" +
+                sid.substring(2, 5) + "/" +
+                sid + "_" +
+                ts.substring(0, 4) +
+                ts.substring(5, 7) +
+                ts.substring(8, 10) + "_" +
+                ts.substring(11, 13) +
+                ts.substring(14, 16) +
+                ts.substring(17, 19) +
+                ".geojson";
+        }
+        else {
+            return datapath +
+                source_map[ascent.source] +
+                sid.substring(0, 2) + "/" +
+                sid.substring(2, 5) + "/" +
+                ts.substring(0, 4) + "/" +
+                ts.substring(5, 7) + "/" +
+                sid + "_" +
+                ts.substring(0, 4) +
+                ts.substring(5, 7) +
+                ts.substring(8, 10) + "_" +
+                ts.substring(11, 13) +
+                ts.substring(14, 16) +
+                ts.substring(17, 19) +
+                ".geojson";
+        }
+    }
+
+    const windDirection = (x,y) => ((2*Math.PI + Math.atan2(x,y))*180/Math.PI)%360;
+
+    ////load all the summary:
+    fetch(datapath+"summary.geojson").then(r=>r.json()).then(sum=>{
+        summaryFmt = sum.properties.fmt;
+        sum.features.forEach(d=>{
+            let [lng,lat]=d.geometry.coordinates;
+
+            //find newest ascent,  not sure if needed,  but jst in case
+            let iNewestAsc;
+            let newest=-Infinity;
+            d.properties.ascents.forEach((a,i)=>{
+                if (a.syn_timestamp>newest){
+                    newest=a.syn_timestamp;
+                    iNewestAsc=i;
+                }
+            });
+
+            let asc=d.properties.ascents[iNewestAsc];
+            let age= (Date.now()/1000 - asc.syn_timestamp)/3600;
+            markerOptions.color=getAgeColor(age);
+            let l = markers.push(
+                L.circleMarker([lat,lng],markerOptions).addTo(map).on('click',e=>{
+                    thisPlugin.open();
+                    if (prevMarker && prevColor) prevMarker.setStyle({color: prevColor});
+                    prevColor=e.target.options.color;
+                    prevMarker=e.target;
+                    prevMarker.setStyle({color: markerSelectedColor});
+
+                    fetch(dataURI(d.properties.station_id,asc)).then(r=>r.json()).then(d=>{
+                        let ar = d.features.map(f=>{
+                            let p=f.properties;
+                                //console.log(p);
+                            let temp=p.temp-273.15;
+                            let dwpt=p.dewpoint-273.15;
+                            let hght=p.gpheight;
+                            let press=p.pressure;
+                            let wdir=windDirection(p.wind_u, p.wind_v);
+                            let wspd=Math.sqrt(p.wind_u*p.wind_u+p.wind_v+p.wind_v);
+                            let time=p.time;
+                            return {temp,dwpt,hght,press,wdir,wspd,time};
+                        });
+                        skewt.plot(ar)
+                    });
+                })
+            );
+            markers[l-1].age = age;
+           // console.log(markers);
+        });
+
+        handleAgeRangeInput();
+    });
+
+
+    /////Bottom slide //I changed it so that the plugin top can be moved down.
+    if (rs.isMobile) {
+        BottomSlide.instance({
+            el: this.refs.slidingX, // Sensitive handler
+            pluginEl: this.element,
+            pluginName: this.ident,
+
+            ondrag: function (x, y) {
+                thisPlugin.element.style.top=(this.startTop+y+10)+"px";
+            },
+
+            ondragstart: function (xy) {
+                this.startTop=thisPlugin.element.offsetTop;
+            },
+
+            ondragend: function() {
+                if (this.pluginEl.offsetTop<10){
+                    this.pluginEl.style.top="10px";
+                } else if (this.pluginEl.offsetHeight<100) {
+                    this.pluginEl.style.top="10px";
+                    thisPlugin.close();//but not with "unmount"
+                }
+            }
+        });
+    }
+
+
+</script>
+</plugin>

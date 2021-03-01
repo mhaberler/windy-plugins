@@ -1,0 +1,313 @@
+@import 'dev/variables.less';
+
+@yellow:   #fff3e1;
+@red: rgba(157,3,0,1);
+@lRed: #946051;
+@white: #f8f8f8;  //rgba(248,248,248,1)
+.bg-gray{ background-color: rgba(77,77,77,1);}
+@grayBg: rgba(77,77,77,1);
+@black: rgba(0,0,0,1);
+@transparent:  rgba(68, 65, 65, 0.84);   //doesnt look very transparent to me,  but thats how its named :)
+
+
+//@import 'plugins/core.less';
+
+@plugin:  windy-plugin-radiosonde;
+@on-plugin: onwindy-plugin-radiosonde;
+
+//@plugin:  plugin-radiosonde;
+//@on-plugin: onradiosonde;
+
+@widthOfMyPlugin: 350px;
+@dark-bg-color: rgba(0,0,0,0.8);
+
+.@{on-plugin} {
+    .left-border {
+        left: @widthOfMyPlugin;
+    }
+    #search {
+        display: none;
+    }
+}
+
+.moooving.@{on-plugin} .shy {
+    opacity:0.7 !important;
+}
+
+
+.radiosonde-button{
+    background-color: @transparent;
+    //padding:2px;
+    width:150px;
+    height:26px;
+    line-height:24px;
+    padding-left:10px;
+    margin:2px;
+    border-radius: 8px;
+    border:1px solid rgba(0,0,0,0.7);
+    pointer-events:auto;
+}
+
+#radiosonde-range-container{
+    .radiosonde-button();
+
+    text-align:center;
+    width:220px;
+    height:30px;
+
+    #radiosonde-range{
+        -webkit-appearance: none;
+        margin: 6px;
+        width:calc(100% - 12px);
+        background-color:transparent;
+        &:focus{
+            outline:none;
+        }
+        &::-webkit-slider-runnable-track {
+            -webkit-appearance: none;
+            background-color:rgba(255,255,255,0.5);
+            border-radius: 16px;
+            height:16px;
+            padding:2px;
+
+        }
+        &::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            border: 1px solid rgba(100,100,100);
+            height: 12px;
+            width: 12px;
+            border-radius: 12px;
+            background: #ffffff;
+            cursor: pointer;
+            //margin: 2px; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+            box-shadow: 1px 1px 1px #000000;
+        }
+    }
+}
+
+
+
+
+#@{plugin} {
+    position:absolute;
+    width: @widthOfMyPlugin;
+    height:100%;
+
+    .desktab-heading{
+        text-align:center;
+        color:@red;
+    }
+
+    .closing-x{
+        top:45px;
+        &.collapse-pane{
+            top:0px;
+            &::before{
+                content:'}';
+            }
+        }
+    }
+
+    .plugin-content {
+        font-size:11px;
+        padding:3px;
+        .heading{
+            margin-bottom:5px;
+        }
+        .section{
+            margin-left:10px;
+        }
+
+        .toggle-section{
+            margin-top:10px;
+            &.checkbox{
+                &::before{
+                    content: '\25B7\00a0\00a0';
+                    top:-0.1em;
+                    font-size:13px;
+                }
+                & + *{
+                    display:none;
+                }
+
+                &.off{
+                    &::before{
+                        content: "\25BD\00a0\00a0";
+                        top:-0.1em;
+                        font-size:13px;
+                    }
+                    & + *{
+                        display:block;
+                    }
+                }
+            }
+        }
+    }
+
+
+
+     //range styling for webkit and moz
+    @track-color: rgba(0,0,0,0.1);
+    @thumb-color: #d49500;
+
+    @thumb-radius: 8px;
+    @thumb-size: 16px;
+    @thumb-border-width: 1px;
+    @thumb-border-color: #6b6b6b;
+
+    @track-width: 100%;
+    @track-height: 22px;
+    @track-border-width: 1px;
+    @track-border-color: rgba(255,255,255,0.3);
+    @track-radius: 10px;
+
+    .track() {
+        width: @track-width;
+        height: @track-height;
+        border-color: @track-border-color;
+        cursor: pointer;
+    }
+
+    .thumb() {
+        //border: @thumb-border-width solid @thumb-border-color;
+        height: @thumb-size;
+        width: @thumb-size;
+        border-radius: @thumb-radius;
+        background: @thumb-color;
+        cursor: pointer;
+        box-shadow: 1px 1px 3px black;
+    }
+
+    .myrange {
+        display:block;
+        -webkit-appearance: none;
+
+        width: @track-width;
+        background-color: transparent;
+        position:relative;
+
+        &:focus {
+            outline: none;
+        }
+
+        &::-webkit-slider-runnable-track {
+            .track();
+            margin: 0 0; //@thumb-size / 3 0;
+            background: @track-color;
+            border-radius: @track-radius;
+            padding:0px 2px;
+            border: @track-border-width solid @track-border-color;
+        }
+
+        &::-webkit-slider-thumb {
+            .thumb();
+            -webkit-appearance: none;
+            margin-top: ((-@track-border-width * 2 + @track-height) / 2) - (@thumb-size / 2) ;
+        }
+
+        &::-moz-range-track {
+            .track();
+            background: @track-color;
+            border-radius: @track-radius + 1;
+            padding:1px;
+            border: @track-border-width solid @track-border-color;
+        }
+
+        &::-moz-range-thumb {
+            .thumb();
+
+        }
+    }
+    @-moz-document url-prefix() {
+        .myrange{
+            margin: 4px 0px;
+        }
+    }
+}
+
+
+#device-mobile{
+
+    ////if plugin pane open,  move bottom to left.  if calendar expanded move bottom up
+
+    #open-in-app{
+        display:none;
+    }
+
+   #@{plugin}{
+
+        top:10px;
+        bottom:58px;
+        height:auto;
+        width:100%;
+        z-index: 500;
+        transition: bottom 0.5s;
+        border-bottom:30px solid @white;
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+
+        .closing-x{
+            top:20px;
+            right:-5px;
+            &.collapse-pane{
+                top:-5px;
+                &::before{
+                    content:'}';
+                }
+            }
+        }
+
+        .sliding-x{
+            opacity:0.6 !important;
+        }
+
+        .plugin-content{
+            top:10px;
+            background-color: transparent;
+        }
+
+        .desktab-heading{
+            display:none;
+        }
+        .bottom-border-mobile{
+            //display:none;
+            height:30px;
+            width:100%;
+            bottom:0px;
+            position:absolute;
+            background-image: linear-gradient(to bottom, rgba(248,248,248,0), rgba(248,248,248,1));
+            pointer-events: none;
+        }
+    }
+
+    .@{on-plugin} {
+        #bottom{
+            left:0px !important;
+        }
+        #bottom{
+            z-index:1000;
+            pointer-events: none;
+            #mobile-calendar{
+                pointer-events: initial;
+            }
+        }
+
+        &.mobile-calendar-expanded{
+            #@{plugin} {
+                bottom:98px;
+            }
+        }
+    }
+}
+
+#device-tablet{
+    //put logo in a better position on tablet,  otherwise it is over the left pane title.
+    #logo{
+        left:100%;
+        margin-left:150px;
+    }
+
+    #open-in-app{
+        display:none;
+    }
+}
