@@ -170,17 +170,7 @@
         sum.features.forEach(d=>{
             let [lng,lat]=d.geometry.coordinates;
 
-            //find newest ascent,  not sure if needed,  but jst in case
-            let iNewestAsc;
-            let newest=-Infinity;
-            d.properties.ascents.forEach((a,i)=>{
-                if (a.syn_timestamp>newest){
-                    newest=a.syn_timestamp;
-                    iNewestAsc=i;
-                }
-            });
-
-            let asc=d.properties.ascents[iNewestAsc];
+            let asc=d.properties.ascents[0];
             let age= (Date.now()/1000 - asc.syn_timestamp)/3600;
             markerOptions.color=getAgeColor(age);
             let l = markers.push(
